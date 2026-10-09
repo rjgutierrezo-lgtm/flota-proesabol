@@ -100,6 +100,12 @@ async function viewPlataforma(){ PLAT=await api("plataforma"); const E=PLAT.empr
   $("main").querySelectorAll("[data-wa]").forEach(a=>{ const e=E.find(x=>x.id==a.dataset.wa), t=e.telefono_admin.length===8?"591"+e.telefono_admin:e.telefono_admin;
     a.href=`https://wa.me/${t}?text=${encodeURIComponent(recordatorio(e))}`; a.onclick=ev=>ev.stopPropagation(); });
   $("enew").onclick=()=>empresaForm(null);
+  const tb=$("enew").parentElement; const bd=document.createElement("button"); bd.className="sec"; bd.textContent="🧪 Crear / regenerar empresa demo"; tb.appendChild(bd);
+  bd.onclick=async()=>{ if(!confirm("Se crea (o se borra y vuelve a crear) la empresa 'Transportes Demo' con 6 meses de datos ficticios. ¿Continuar?")) return; bd.disabled=true; bd.textContent="Generando datos…";
+    try{ const r=await api("demo",{body:{}}); dialog(`<h3>🧪 Empresa demo lista</h3><p><b>${esc(r.empresa)}</b> con ${r.registros} registros de los últimos 6 meses.</p>
+      <div class="tbl"><table><thead><tr><th>Usuario</th><th>Contraseña</th><th>Qué ve</th></tr></thead><tbody>${r.usuarios.map(u=>`<tr><td><b>${esc(u.usuario)}</b></td><td>${esc(u.clave)}</td><td><small>${esc(u.perfil)}</small></td></tr>`).join("")}</tbody></table></div>
+      <p class="muted">Ábrelo en otra ventana privada o en otro navegador para no cerrar tu sesión. Regenérala antes de cada demo para que las fechas queden al día.</p><div class="acts"><button id="dx">Listo</button></div>`, B=>B.querySelector("#dx").onclick=()=>{ closeDlg(); go("plataforma"); }); }
+    catch(e){ toast(e.message); } bd.disabled=false; bd.textContent="🧪 Crear / regenerar empresa demo"; };
   document.querySelectorAll("#main tr[data-id]").forEach(tr=>tr.onclick=e=>{ if(e.target.closest("a")) return; empresaForm(E.find(x=>x.id==tr.dataset.id)); }); }
 function recordatorio(e){ const d=diasA(e.vence,PLAT.hoy);
   return `Hola, te escribimos por el sistema de inventario de *${e.nombre}*. ${d>=0?`Tu suscripción vence el ${e.vence}.`:`Tu suscripción venció el ${e.vence} y el sistema se bloqueará pronto.`} El monto es *Bs ${fmtN(precioEmp(e),0)}* al mes. Puedes pagar por QR o transferencia y enviarnos el comprobante por aquí. ¡Gracias!`; }
