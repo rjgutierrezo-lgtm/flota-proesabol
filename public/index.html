@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>FlotaControl</title>
+<meta name="description" content="Control de flota: mantenimientos, combustible y costos">
+<meta name="theme-color" content="#1D4ED8"><link rel="icon" href="/icon.svg" type="image/svg+xml"><link rel="icon" href="/favicon.png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="manifest" href="/manifest.json">
+<meta property="og:title" content="FlotaControl"><meta property="og:description" content="Control de flota: mantenimientos, combustible y costos"><meta property="og:image" content="/tarjeta.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- Instalación -->
+<section id="vSetup" class="auth hidden"><div class="card">
+  <picture><source srcset="/logo-oscuro.svg" media="(prefers-color-scheme: dark)"><img src="/logo.svg" alt="FlotaControl" style="width:100%;max-width:300px;display:block;margin:0 auto 14px"></picture>
+  <h2>Instalación</h2><p class="muted">Crea tu usuario de dueño de la plataforma. Con él vas a crear las empresas.</p>
+  <div class="field"><label>Clave de instalación (SETUP_KEY)</label><input id="suKey" type="password"></div>
+  <div class="field"><label>Tu nombre</label><input id="suNombre"></div>
+  <div class="field"><label>Usuario</label><input id="suUser" autocapitalize="none"></div>
+  <div class="field"><label>Contraseña (mínimo 10)</label><input id="suPass" type="password"></div>
+  <div class="err" id="suErr"></div><button id="suBtn">Crear administrador</button></div></section>
+<!-- Login -->
+<section id="vLogin" class="auth hidden"><div class="card">
+  <picture><source srcset="/logo-oscuro.svg" media="(prefers-color-scheme: dark)"><img src="/logo.svg" alt="FlotaControl" style="width:100%;max-width:300px;display:block;margin:0 auto 14px"></picture>
+  <h2 id="loginTitle">Ingresar</h2>
+  <div class="field"><label>Usuario</label><input id="lgUser" autocapitalize="none" autocomplete="username"></div>
+  <div class="field"><label>Contraseña</label><input id="lgPass" type="password" autocomplete="current-password"></div>
+  <div class="err" id="lgErr"></div><button id="lgBtn" style="width:100%">Entrar</button>
+</div></section>
+<!-- App -->
+<div id="vApp" class="hidden">
+  <header class="top"><div class="topin"><img src="/icon.svg" alt="" width="30" height="30" style="border-radius:8px;flex:none"><span class="brand" id="brand"></span><span class="sucsel" id="sucWrap"></span><span class="who" id="who"></span><button class="sec" id="logout">Salir</button></div>
+    <nav id="nav"></nav></header>
+  <main id="main"></main>
+</div>
+<dialog id="dlg"><div class="dlg" id="dlgBody"></div></dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="qrcode.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+// POST: iniciar sesión | GET: datos de la sesión | DELETE: cerrar sesión
+import { json, err, txt, hashPass, randomHex, sameStr, sesion, bloqueo, aviso, limites, misSucursales, PERFIL_EMPRESA } from "../../lib/db.js";
+async function perfil(env, u) {
+  const out = { id: u.id, usuario: u.usuario, nombre: u.nombre, super: !!u.super, permisos: u.super ? [] : u.permisos };
+  if (!u.super) {
+    out.empresa = await env.DB.prepare(PERFIL_EMPRESA).bind(u.empresa_id).first();
+    out.aviso = aviso(out.empresa); out.plan = await limites(env, u.empresa_id);
+    out.sucursales = await misSucursales(env, { ...u, sucursales: Array.isArray(u.sucursales) ? u.sucursales : JSON.parse(u.sucursales || "[]") });
+  }
+  return out;
+}
+export async function onRequestPost({ request, env }) {
+  const b = await request.json().catch(() => ({}));
+  const u = await env.DB.prepare("SELECT * FROM usuarios WHERE usuario = ? AND activo = 1").bind(txt(b.usuario, 60).toLowerCase()).first();
+  const h = u ? await hashPass(String(b.password || ""), u.salt) : await hashPass("x", "y");
+  if (!u || !sameStr(h, u.hash)) return err("Usuario o contraseña incorrectos", 401);
+  if (!u.super) { const e = await env.DB.prepare("SELECT activo, vence FROM empresas WHERE id = ?").bind(u.empresa_id).first(); const bq = bloqueo(e); if (bq) return err(bq, 403); }
+  const token = randomHex(32);
+  await env.DB.batch([env.DB.prepare("DELETE FROM sesiones WHERE expira < datetime('now')"),
+    env.DB.prepare("INSERT INTO sesiones(token, usuario_id, expira) VALUES(?, ?, datetime('now', '+30 days'))").bind(token, u.id)]);
+  u.permisos = JSON.parse(u.permisos || "[]");
+  return json({ ok: true, token, usuario: await perfil(env, u) });
+}
+export async function onRequestGet({ request, env }) {
+  const u = await sesion(request, env); if (!u) return err("Sesión vencida", 401);
+  return json({ ok: true, usuario: await perfil(env, u) });
+}
+export async function onRequestDelete({ request, env }) {
+  const u = await sesion(request, env); if (u) await env.DB.prepare("DELETE FROM sesiones WHERE token = ?").bind(u.token).run();
+  return json({ ok: true });
+}

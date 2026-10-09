@@ -1,0 +1,2 @@
+{"name":"FlotaControl","short_name":"FlotaControl","description":"Control de flota: mantenimientos, combustible y costos","start_url":"/","display":"standalone","background_color":"#0B2A6F","theme_color":"#1D4ED8","lang":"es",
+ "icons":[{"src":"/icon-192.png","sizes":"192x192","type":"image/png"},{"src":"/icon-512.png","sizes":"512x512","type":"image/png"},{"src":"/icon-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}]}
