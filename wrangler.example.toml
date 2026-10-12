@@ -1,0 +1,19 @@
+# Configuración para desarrollo local con `npx wrangler pages dev`.
+# En producción (Cloudflare Pages) los bindings se configuran en el panel: Settings → Functions → Bindings.
+name = "flota"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "flota"
+database_id = "00000000-0000-0000-0000-000000000000"   # reemplaza por el id real (wrangler d1 list)
+
+# Opcional: fotos en R2. Si no se conecta, las fotos se guardan en D1.
+# [[r2_buckets]]
+# binding = "FOTOS"
+# bucket_name = "flota-fotos"
+
+[vars]
+# Clave para crear el primer administrador de la plataforma (solo se usa una vez). En producción ponla como secreto.
+SETUP_KEY = "cambia-esta-clave"

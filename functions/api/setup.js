@@ -1,5 +1,5 @@
 // Crea el usuario dueño de la plataforma (super administrador). Requiere SETUP_KEY y solo funciona una vez.
-import { json, err, txt, hashPass, randomHex, sameStr, validUser } from "../../lib/db.js";
+import { json, err, txt, hashPass, randomHex, sameStr, validUser, ITER } from "../../lib/db.js";
 export async function onRequestGet({ env }) {
   const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM usuarios WHERE super = 1").first();
   return json({ ok: true, necesita: c.n === 0 });
@@ -13,7 +13,7 @@ export async function onRequestPost({ request, env }) {
   if (!validUser(usuario)) return err("Usuario: 3 a 60 letras, números, punto, guion o @");
   if (pass.length < 10) return err("La contraseña del dueño de la plataforma debe tener al menos 10 caracteres");
   const salt = randomHex(16);
-  await env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, super) VALUES(NULL,?,?,?,?,1)")
-    .bind(usuario, txt(b.nombre, 80) || usuario, await hashPass(pass, salt), salt).run();
+  await env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, super, iter) VALUES(NULL,?,?,?,?,1,?)")
+    .bind(usuario, txt(b.nombre, 80) || usuario, await hashPass(pass, salt), salt, ITER).run();
   return json({ ok: true });
 }

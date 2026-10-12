@@ -9,8 +9,8 @@ export async function onRequestGet({ request, env }) {
     env.DB.prepare(`SELECT v.*, s.nombre AS sucursal, c.nombre AS conductor, c.licencia_vence FROM vehiculos v JOIN sucursales s ON s.id = v.sucursal_id LEFT JOIN conductores c ON c.id = v.conductor_id
       WHERE v.empresa_id = ? AND v.sucursal_id IN (${ph})${w} ORDER BY v.estado = 'baja', v.placa`).bind(E(u), ...sucs, ...wv),
     env.DB.prepare("SELECT * FROM planes WHERE empresa_id = ? AND activo = 1 ORDER BY id").bind(E(u)),
-    env.DB.prepare(`SELECT vehiculo_id, SUM(CASE WHEN tipo='combustible' THEN monto ELSE 0 END) AS comb, SUM(monto) AS total FROM eventos WHERE empresa_id = ? AND anulado = 0 AND fecha >= ? GROUP BY vehiculo_id`).bind(E(u), new Date(Date.now() - 30 * 864e5).toISOString()),
-    env.DB.prepare(`SELECT e.vehiculo_id, e.rendimiento, e.alerta, e.fecha FROM eventos e WHERE e.empresa_id = ? AND e.anulado = 0 AND e.tipo = 'combustible' AND e.id IN (SELECT MAX(id) FROM eventos WHERE empresa_id = ? AND tipo='combustible' AND anulado = 0 GROUP BY vehiculo_id)`).bind(E(u), E(u))]);
+    env.DB.prepare(`SELECT vehiculo_id, SUM(CASE WHEN tipo='combustible' THEN monto ELSE 0 END) AS comb, SUM(monto) AS total, MAX(km) - MIN(km) AS km, SUM(CASE WHEN tipo='combustible' THEN litros ELSE 0 END) AS litros FROM eventos WHERE empresa_id = ? AND anulado = 0 AND fecha >= ? GROUP BY vehiculo_id`).bind(E(u), new Date(Date.now() - 30 * 864e5).toISOString()),
+    env.DB.prepare(`SELECT e.vehiculo_id, e.rendimiento, e.alerta, e.fecha, e.monto, e.litros FROM eventos e WHERE e.empresa_id = ? AND e.anulado = 0 AND e.tipo = 'combustible' AND e.id IN (SELECT MAX(id) FROM eventos WHERE empresa_id = ? AND tipo='combustible' AND anulado = 0 GROUP BY vehiculo_id)`).bind(E(u), E(u))]);
   const vehiculos = v.results.map(x => {
     const planes = p.results.filter(y => y.vehiculo_id === x.id).map(y => ({ ...y, ...estadoPlan(y, x.km_actual, hoy) }));
     const docs = { soat: estadoDoc(x.soat_vence, hoy), itv: estadoDoc(x.itv_vence, hoy), seguro: estadoDoc(x.seguro_vence, hoy), licencia: estadoDoc(x.licencia_vence, hoy) };
@@ -20,7 +20,8 @@ export async function onRequestGet({ request, env }) {
     for (const [k, d] of Object.entries(docs)) if (d && d.estado !== "ok") alertas.push({ nivel: d.estado === "vencido" ? "bad" : "warn", texto: `${nom[k]}: ${d.estado === "vencido" ? `vencido hace ${-d.dias} días` : `vence en ${d.dias} días`}` });
     const u2 = ult.results.find(y => y.vehiculo_id === x.id); if (u2?.alerta) alertas.push({ nivel: "warn", texto: "Última carga: " + u2.alerta });
     const g = c.results.find(y => y.vehiculo_id === x.id) || {};
-    return { ...x, planes, docs, alertas, gasto_30d: g.total || 0, rendimiento_ult: u2?.rendimiento ?? null };
+    return { ...x, planes, docs, alertas, gasto_30d: g.total || 0, km_30d: g.km || 0, litros_30d: g.litros || 0, costo_km_30d: g.km > 0 ? Math.round(g.total / g.km * 100) / 100 : null,
+      rendimiento_ult: u2?.rendimiento ?? null, precio_litro_ult: u2?.litros > 0 && u2?.monto > 0 ? Math.round(u2.monto / u2.litros * 100) / 100 : null, ultima_carga: u2?.fecha || null };
   });
   return json({ ok: true, vehiculos, hoy });
 }
@@ -36,10 +37,14 @@ export async function onRequestPost({ request, env }) {
   let foto; if (typeof b.foto === "string" && b.foto.startsWith("data:")) { try { foto = await guardarFoto(env, E(u), b.foto); } catch (e) { return err(e.message); } }
   try {
     if (b.id) {
-      const cur = await env.DB.prepare("SELECT estado FROM vehiculos WHERE id = ? AND empresa_id = ?").bind(int(b.id), E(u)).first(); if (!cur) return err("Vehículo no encontrado", 404);
+      const cur = await env.DB.prepare("SELECT estado, sucursal_id, km_actual FROM vehiculos WHERE id = ? AND empresa_id = ?").bind(int(b.id), E(u)).first();
+      if (!cur || !(await misSucursales(env, u)).some(s => s.id === cur.sucursal_id)) return err("Vehículo no encontrado", 404);
+      // corrección manual del odómetro (solo si se envía y cambia)
+      const kmNuevo = b.km_actual === "" || b.km_actual == null ? null : Math.max(0, num(b.km_actual));
       if (cur.estado === "baja" && estado !== "baja") { const lim = await revisarLimite(env, E(u), "vehiculos"); if (lim) return err(lim, 402); }
       await env.DB.prepare(`UPDATE vehiculos SET sucursal_id=?, placa=?, marca=?, modelo=?, anio=?, tipo=?, combustible=?, tanque_l=?, rendimiento_esp=?, conductor_id=?, estado=?,
-        soat_vence=?, itv_vence=?, seguro_vence=?, notas=?${foto ? ", foto=?" : ""} WHERE id=? AND empresa_id=?`).bind(...vals, ...(foto ? [foto] : []), int(b.id), E(u)).run();
+        soat_vence=?, itv_vence=?, seguro_vence=?, notas=?${foto ? ", foto=?" : ""}${kmNuevo != null && kmNuevo !== cur.km_actual ? ", km_actual=?" : ""} WHERE id=? AND empresa_id=?`)
+        .bind(...vals, ...(foto ? [foto] : []), ...(kmNuevo != null && kmNuevo !== cur.km_actual ? [kmNuevo] : []), int(b.id), E(u)).run();
       return json({ ok: true, id: int(b.id) });
     }
     const lim = await revisarLimite(env, E(u), "vehiculos"); if (lim) return err(lim, 402);

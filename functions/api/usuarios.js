@@ -1,5 +1,5 @@
 // Usuarios de la empresa (permiso "usuarios"). GET: lista | POST: crear o editar
-import { json, err, int, txt, sesion, puede, hashPass, randomHex, validUser, revisarLimite, PERMISOS, E } from "../../lib/db.js";
+import { json, err, int, txt, sesion, puede, hashPass, randomHex, validUser, revisarLimite, PERMISOS, ITER, E } from "../../lib/db.js";
 export async function onRequestGet({ request, env }) {
   const u = await sesion(request, env); if (!puede(u, "usuarios")) return err("Sin permiso", 403);
   const { results } = await env.DB.prepare("SELECT id, usuario, nombre, permisos, sucursales, activo, creado FROM usuarios WHERE empresa_id = ? ORDER BY nombre").bind(E(u)).all();
@@ -22,7 +22,7 @@ export async function onRequestPost({ request, env }) {
     if (perms) { sets.push("permisos=?"); vals.push(JSON.stringify(perms)); }
     if (sucs) { sets.push("sucursales=?"); vals.push(JSON.stringify(sucs)); }
     if (b.activo !== undefined) { sets.push("activo=?"); vals.push(b.activo ? 1 : 0); }
-    if (b.password) { if (String(b.password).length < 8) return err("La contraseña debe tener al menos 8 caracteres"); const salt = randomHex(16); sets.push("salt=?", "hash=?"); vals.push(salt, await hashPass(String(b.password), salt)); }
+    if (b.password) { if (String(b.password).length < 8) return err("La contraseña debe tener al menos 8 caracteres"); const salt = randomHex(16); sets.push("salt=?", "hash=?", "iter=?"); vals.push(salt, await hashPass(String(b.password), salt), ITER); }
     if (!sets.length) return err("Nada que cambiar");
     const st = [env.DB.prepare(`UPDATE usuarios SET ${sets.join(",")} WHERE id=? AND empresa_id=?`).bind(...vals, id, E(u))];
     if (b.activo === false || b.password) st.push(env.DB.prepare("DELETE FROM sesiones WHERE usuario_id=?").bind(id));
@@ -33,8 +33,8 @@ export async function onRequestPost({ request, env }) {
   if (!validUser(usuario)) return err("Usuario: 3 a 60 letras, números, punto, guion o @");
   if (pass.length < 8) return err("La contraseña debe tener al menos 8 caracteres");
   const salt = randomHex(16);
-  try { await env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, permisos, sucursales) VALUES(?,?,?,?,?,?,?)")
-      .bind(E(u), usuario, txt(b.nombre, 80) || usuario, await hashPass(pass, salt), salt, JSON.stringify(perms || ["registrar"]), JSON.stringify(sucs || [])).run(); }
+  try { await env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, permisos, sucursales, iter) VALUES(?,?,?,?,?,?,?,?)")
+      .bind(E(u), usuario, txt(b.nombre, 80) || usuario, await hashPass(pass, salt), salt, JSON.stringify(perms || ["registrar"]), JSON.stringify(sucs || []), ITER).run(); }
   catch (e) { if (String(e).includes("UNIQUE")) return err("Ese nombre de usuario ya está en uso en la plataforma. Prueba otro (ej: ana.tienda)"); throw e; }
   return json({ ok: true });
 }

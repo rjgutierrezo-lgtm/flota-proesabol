@@ -4,30 +4,39 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const fmtN=(n,d=2)=>Number(n||0).toLocaleString("es-BO",{minimumFractionDigits:d,maximumFractionDigits:d});
 const fmtQ=n=>Number(n||0).toLocaleString("es-BO",{maximumFractionDigits:3});
 const money=n=>`${EMP?.moneda||"Bs"} ${fmtN(n)}`;
-const fdate=s=>{ if(!s) return ""; const d=new Date(s.replace(" ","T")+"Z"); return d.toLocaleString("es-BO",{dateStyle:"short",timeStyle:"short"}); };
 const today=()=>{ const d=new Date(); return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10); };
 const daysAgo=n=>{ const d=new Date(Date.now()-n*864e5); return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10); };
 function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),3800); }
-const ls={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}},del:k=>{try{localStorage.removeItem(k)}catch(e){}}};
-let TOKEN=ls.get("ag-token"), USER=null, EMP=null, SUCS=[], ALLSUCS=[], SUC=null;
+const ls={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v);return true}catch(e){return false}},del:k=>{try{localStorage.removeItem(k)}catch(e){}}};
+let TOKEN=ls.get("ag-token"), OFFLINE=false, USER=null, EMP=null, SUCS=[], ALLSUCS=[], SUC=null;
 async function api(path,opt={}){
-  const r=await fetch("/api/"+path,{method:opt.method||(opt.body?"POST":"GET"),headers:{"content-type":"application/json",...(TOKEN?{authorization:"Bearer "+TOKEN}:{})},body:opt.body?JSON.stringify(opt.body):undefined});
-  const j=await r.json().catch(()=>({ok:false,error:"Sin conexión con el servidor"}));
+  let r; try{ r=await fetch("/api/"+path,{method:opt.method||(opt.body?"POST":"GET"),headers:{"content-type":"application/json",...(TOKEN?{authorization:"Bearer "+TOKEN}:{})},body:opt.body?JSON.stringify(opt.body):undefined}); }
+  catch(e){ const x=new Error("Sin conexión con el servidor"); x.offline=true; throw x; }
+  const j=await r.json().catch(()=>({ok:false,error:"Respuesta no válida del servidor"}));
   if(r.status===401 && path!=="login" && path!=="setup"){ logoutLocal(); throw new Error(j.error||"Sesión vencida"); }
   if(!j.ok) throw new Error(j.error||"Error"); return j;
 }
 const can=p=>USER&&!USER.super&&USER.permisos.includes(p);
 function dialog(html,onReady){ $("dlgBody").innerHTML=html; const d=$("dlg"); if(!d.open) d.showModal(); onReady&&onReady($("dlgBody")); }
 function closeDlg(){ $("dlg").close(); }
-const imgUrl=p=>p.tiene_imagen?`/api/img?id=${p.id}&v=${encodeURIComponent(p.actualizado||"")}`:"";
+// Diálogo secundario, apilado sobre el principal, para confirmar, avisar o pedir un texto. Reemplaza alert/confirm/prompt.
+function pregunta({titulo="",texto="",input=null,ok="Aceptar",cancelar="Cancelar",peligro=false}){ return new Promise(res=>{ const d=$("dlg2"), B=$("dlg2Body");
+  B.innerHTML=`${titulo?`<h3>${esc(titulo)}</h3>`:""}${texto?`<p style="white-space:pre-line;margin:0 0 8px">${esc(texto)}</p>`:""}${input?`<div class="field"><label>${esc(input)}</label><input id="pqIn" autocomplete="off"></div>`:""}
+    <div class="acts">${cancelar?`<button class="sec" id="pqNo">${esc(cancelar)}</button>`:""}<button id="pqOk" class="${peligro?"danger":""}">${esc(ok)}</button></div>`;
+  const fin=v=>{ d.close(); res(v); }; B.querySelector("#pqOk").onclick=()=>fin(input?B.querySelector("#pqIn").value.trim():true);
+  const no=B.querySelector("#pqNo"); if(no) no.onclick=()=>fin(input?null:false); d.oncancel=e=>{ e.preventDefault(); fin(input?null:false); };
+  if(!d.open) d.showModal(); const i=B.querySelector("#pqIn"); (i||B.querySelector("#pqOk")).focus(); if(i) i.onkeydown=e=>{ if(e.key==="Enter") B.querySelector("#pqOk").click(); }; }); }
+const confirmar=(texto,opt={})=>pregunta({texto,ok:"Sí, continuar",...opt});
+const avisar=(texto,titulo="")=>pregunta({titulo,texto,cancelar:null,ok:"Entendido"});
+function descargar(texto,nombre,tipo="text/csv"){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\ufeff"+texto],{type:tipo})); a.download=nombre; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); }
 const sucName=id=>(ALLSUCS.find(s=>s.id===id)||SUCS.find(s=>s.id===id)||{}).nombre||"—";
-const stockEn=(p,sid)=>Number(p.stock?.[sid]||0);
 const val=(b,s)=>b.querySelector(s)?.value??"";
 
 // ===================== Inicio, instalación y login =====================
 function show(v){ ["vSetup","vLogin","vApp"].forEach(x=>$(x).classList.toggle("hidden",x!==v)); }
 async function boot(){
-  if(TOKEN){ try{ setUser((await api("login")).usuario); return startApp(); }catch(e){} }
+  if(TOKEN){ try{ const u=(await api("login")).usuario; ls.set("ag-user",JSON.stringify(u)); setUser(u); return startApp(); }
+    catch(e){ const c=ls.get("ag-user"); if(e.offline&&c){ OFFLINE=true; setUser(JSON.parse(c)); return startApp(); } } }
   try{ const s=await api("setup"); if(s.necesita) return show("vSetup"); }catch(e){}
   show("vLogin"); $("lgUser").focus();
 }
@@ -36,10 +45,10 @@ $("suBtn").onclick=async()=>{ $("suErr").textContent="";
     $("lgUser").value=$("suUser").value; toast("Usuario de plataforma creado. Ahora ingresa."); show("vLogin"); }catch(e){ $("suErr").textContent=e.message; } };
 function setUser(u){ USER=u; EMP=u.empresa||null; SUCS=u.sucursales||[]; const saved=+ls.get("ag-suc-"+u.id); SUC=SUCS.some(s=>s.id===saved)?saved:(SUCS[0]?.id||null); }
 async function doLogin(){ $("lgErr").textContent=""; $("lgBtn").disabled=true;
-  try{ const j=await api("login",{body:{usuario:$("lgUser").value,password:$("lgPass").value}}); TOKEN=j.token; ls.set("ag-token",TOKEN); $("lgPass").value=""; setUser(j.usuario); startApp(); }
+  try{ const j=await api("login",{body:{usuario:$("lgUser").value,password:$("lgPass").value}}); TOKEN=j.token; ls.set("ag-token",TOKEN); ls.set("ag-user",JSON.stringify(j.usuario)); $("lgPass").value=""; setUser(j.usuario); startApp(); }
   catch(e){ $("lgErr").textContent=e.message; } $("lgBtn").disabled=false; }
-$("lgBtn").onclick=doLogin; $("lgPass").addEventListener("keydown",e=>{ if(e.key==="Enter") doLogin(); });
-function logoutLocal(){ endTour(); TOKEN=null; USER=null; ls.del("ag-token"); show("vLogin"); }
+$("lgForm").onsubmit=e=>{ e.preventDefault(); doLogin(); };
+function logoutLocal(){ endTour(); TOKEN=null; USER=null; ls.del("ag-token"); ls.del("ag-user"); pintarCola(); show("vLogin"); }
 $("logout").onclick=async()=>{ try{ await api("login",{method:"DELETE"}); }catch(e){} logoutLocal(); };
 
 // ===================== Navegación =====================
@@ -68,6 +77,8 @@ async function startApp(){ show("vApp"); $("who").textContent=USER.nombre;
   if(!USER.super&&!SUCS.length){ $("main").innerHTML=`<div class="card">Tu usuario no tiene sucursales asignadas o no hay sucursales activas.</div>`; }
   const hv=location.hash.match(/^#v=([a-f0-9]+)/i);
   if(hv&&!USER.super){ history.replaceState(null,"",location.pathname); try{ await cargarVeh(); const v=VEH.find(x=>x.codigo===hv[1].toLowerCase()); if(v&&(can("registrar")||can("mantenimiento"))){ PRESEL={vehiculo_id:v.id}; return go("registrar"); } }catch(e){} }
+  pintarCola(); enviarCola();
+  if(OFFLINE){ OFFLINE=false; toast("Sin conexión: puedes registrar y se enviará cuando vuelva la señal"); if(vs.some(v=>v.id==="registrar")) return go("registrar"); }
   go(vs[0].id); }
 function drawAviso(){ let a=$("aviso"); if(!a){ a=document.createElement("div"); a.id="aviso"; $("main").before(a); }
   const v=USER.aviso; a.innerHTML=v?`<div style="max-width:1200px;margin:12px auto 0;padding:0 16px"><div class="card" style="border-color:var(--${v.nivel});background:var(--${v.nivel}-soft);color:var(--${v.nivel});font-weight:600">${v.nivel==="bad"?"⛔":"⚠️"} ${esc(v.texto)}</div></div>`:""; }
@@ -83,7 +94,7 @@ let PLAT=null;
 const diasA=(f,h)=>Math.round((new Date(f+"T12:00:00Z")-new Date(h+"T12:00:00Z"))/864e5);
 function estadoEmp(e){ const h=PLAT.hoy; if(!e.activo) return ["Suspendida","bad"]; if(!e.vence) return ["Sin vencimiento","ok"];
   const d=diasA(e.vence,h); if(d<-PLAT.gracia) return ["Bloqueada por falta de pago","bad"]; if(d<0) return [`En gracia (${PLAT.gracia+d} días)`,"bad"]; if(d<=7) return [`Vence en ${d} días`,"warn"]; return ["Al día","ok"]; }
-const precioEmp=e=>e.precio??PLAT.planes[e.plan||"emprendedor"].precio;
+const precioEmp=e=>e.precio??PLAT.planes[e.plan||"basico"].precio;
 async function viewPlataforma(){ PLAT=await api("plataforma"); const E=PLAT.empresas, h=PLAT.hoy;
   const activas=E.filter(e=>e.activo&&(!e.vence||diasA(e.vence,h)>=-PLAT.gracia)), mrr=activas.reduce((a,e)=>a+precioEmp(e),0);
   const porCobrar=E.filter(e=>e.activo&&e.vence&&diasA(e.vence,h)<=7);
@@ -93,7 +104,7 @@ async function viewPlataforma(){ PLAT=await api("plataforma"); const E=PLAT.empr
     <div class="card kpi"><div class="v" style="color:${porCobrar.length?"var(--warn)":"inherit"}">${porCobrar.length}</div><div class="l">Por cobrar (vencen en 7 días o vencidas)</div></div></div>
     <div class="toolbar"><button id="enew">+ Nueva empresa</button></div>
     <div class="card tbl"><table><thead><tr><th>Empresa</th><th>Plan</th><th class="n">Precio</th><th>Vence</th><th>Estado</th><th>Uso</th><th class="n">Registros 30d</th><th></th></tr></thead><tbody>
-    ${E.map(e=>{ const [t,c]=estadoEmp(e), L=PLAT.planes[e.plan||"emprendedor"]; return `<tr class="click" data-id="${e.id}"><td><b>${esc(e.nombre)}</b><br><small class="muted">${esc(e.admins||"")}</small></td>
+    ${E.map(e=>{ const [t,c]=estadoEmp(e), L=PLAT.planes[e.plan||"basico"]; return `<tr class="click" data-id="${e.id}"><td><b>${esc(e.nombre)}</b><br><small class="muted">${esc(e.admins||"")}</small></td>
       <td>${esc(L.nombre)}</td><td class="n">Bs ${fmtN(precioEmp(e),0)}</td><td>${esc(e.vence||"—")}<br><small class="muted">${e.ultimo_pago?"Últ. pago "+esc(e.ultimo_pago.slice(0,10)):"Sin pagos"}</small></td>
       <td><span class="chip ${c}">${t}</span></td><td><small>${e.vehiculos} vehículos · ${e.sucursales} parqueos · ${e.usuarios} usu</small></td><td class="n">${e.eventos_30d}</td>
       <td class="right">${e.vence&&diasA(e.vence,h)<=7&&e.telefono_admin?`<a class="btn sec" data-wa="${e.id}" target="_blank" rel="noopener">Recordar</a>`:""}</td></tr>`; }).join("")||'<tr><td colspan="8" class="muted">Crea tu primera empresa.</td></tr>'}</tbody></table></div>`;
@@ -101,17 +112,17 @@ async function viewPlataforma(){ PLAT=await api("plataforma"); const E=PLAT.empr
     a.href=`https://wa.me/${t}?text=${encodeURIComponent(recordatorio(e))}`; a.onclick=ev=>ev.stopPropagation(); });
   $("enew").onclick=()=>empresaForm(null);
   const tb=$("enew").parentElement; const bd=document.createElement("button"); bd.className="sec"; bd.textContent="🧪 Crear / regenerar empresa demo"; tb.appendChild(bd);
-  bd.onclick=async()=>{ if(!confirm("Se crea (o se borra y vuelve a crear) la empresa 'Transportes Demo' con 6 meses de datos ficticios. ¿Continuar?")) return; bd.disabled=true; bd.textContent="Generando datos…";
+  bd.onclick=async()=>{ if(!await confirmar("Se crea (o se borra y vuelve a crear) la empresa 'Transportes Demo' con 6 meses de datos ficticios. ¿Continuar?")) return; bd.disabled=true; bd.textContent="Generando datos…";
     try{ const r=await api("demo",{body:{}}); dialog(`<h3>🧪 Empresa demo lista</h3><p><b>${esc(r.empresa)}</b> con ${r.registros} registros de los últimos 6 meses.</p>
       <div class="tbl"><table><thead><tr><th>Usuario</th><th>Contraseña</th><th>Qué ve</th></tr></thead><tbody>${r.usuarios.map(u=>`<tr><td><b>${esc(u.usuario)}</b></td><td>${esc(u.clave)}</td><td><small>${esc(u.perfil)}</small></td></tr>`).join("")}</tbody></table></div>
       <p class="muted">Ábrelo en otra ventana privada o en otro navegador para no cerrar tu sesión. Regenérala antes de cada demo para que las fechas queden al día.</p><div class="acts"><button id="dx">Listo</button></div>`, B=>B.querySelector("#dx").onclick=()=>{ closeDlg(); go("plataforma"); }); }
     catch(e){ toast(e.message); } bd.disabled=false; bd.textContent="🧪 Crear / regenerar empresa demo"; };
   document.querySelectorAll("#main tr[data-id]").forEach(tr=>tr.onclick=e=>{ if(e.target.closest("a")) return; empresaForm(E.find(x=>x.id==tr.dataset.id)); }); }
 function recordatorio(e){ const d=diasA(e.vence,PLAT.hoy);
-  return `Hola, te escribimos por el sistema de inventario de *${e.nombre}*. ${d>=0?`Tu suscripción vence el ${e.vence}.`:`Tu suscripción venció el ${e.vence} y el sistema se bloqueará pronto.`} El monto es *Bs ${fmtN(precioEmp(e),0)}* al mes. Puedes pagar por QR o transferencia y enviarnos el comprobante por aquí. ¡Gracias!`; }
+  return `Hola, te escribimos por el sistema de control de flota de *${e.nombre}*. ${d>=0?`Tu suscripción vence el ${e.vence}.`:`Tu suscripción venció el ${e.vence} y el sistema se bloqueará pronto.`} El monto es *Bs ${fmtN(precioEmp(e),0)}* al mes. Puedes pagar por QR o transferencia y enviarnos el comprobante por aquí. ¡Gracias!`; }
 const planOpts=sel=>Object.entries(PLAT.planes).map(([k,p])=>`<option value="${k}" ${k===sel?"selected":""}>${p.nombre} — Bs ${p.precio}/mes (${p.vehiculos??"∞"} vehículos, ${p.sucursales??"∞"} parqueos, ${p.usuarios??"∞"} usu)</option>`).join("");
 async function empresaForm(e){
-  if(!e) return dialog(`<h3>Nueva empresa</h3><div class="row"><div class="field"><label>Nombre de la empresa *</label><input id="en"></div><div class="field"><label>Identificador web (catálogo)</label><input id="es" placeholder="se genera del nombre"></div></div>
+  if(!e) return dialog(`<h3>Nueva empresa</h3><div class="row"><div class="field"><label>Nombre de la empresa *</label><input id="en"></div><div class="field"><label>Identificador web</label><input id="es" placeholder="se genera del nombre"></div></div>
       <div class="field"><label>Plan</label><select id="epl">${planOpts("basico")}</select></div>
       <div class="row"><div class="field"><label>Precio especial (vacío = el del plan)</label><input id="epr" inputmode="decimal"></div><div class="field"><label>Prueba gratis hasta</label><input type="date" id="ev" value="${sumarDiasLocal(14)}"></div></div>
       <h3>Administrador de la empresa</h3><div class="row"><div class="field"><label>Nombre</label><input id="an"></div><div class="field"><label>Celular (para cobros)</label><input id="at" inputmode="tel"></div></div>
@@ -131,7 +142,7 @@ async function empresaForm(e){
       <p class="muted" id="pinfo"></p><button id="pok">Registrar pago</button></div>
     <h3 style="margin-top:16px">Plan y datos</h3>
     <div class="row"><div class="field"><label>Nombre</label><input id="en" value="${esc(e.nombre)}"></div><div class="field"><label>Celular del administrador (cobros)</label><input id="et" value="${esc(e.telefono_admin||"")}" inputmode="tel"></div></div>
-    <div class="field"><label>Plan</label><select id="epl">${planOpts(e.plan||"emprendedor")}</select></div>
+    <div class="field"><label>Plan</label><select id="epl">${planOpts(e.plan||"basico")}</select></div>
     <div class="row"><div class="field"><label>Precio especial (vacío = del plan)</label><input id="epr" inputmode="decimal" value="${e.precio??""}"></div><div class="field"><label>Vencimiento (ajuste manual)</label><input type="date" id="ev" value="${esc(e.vence||"")}"></div></div>
     <div class="row"><div class="field"><label>Límite parqueos (vacío = plan)</label><input id="ls" inputmode="numeric" value="${e.max_sucursales??""}"></div><div class="field"><label>Límite usuarios</label><input id="lu" inputmode="numeric" value="${e.max_usuarios??""}"></div><div class="field"><label>Límite vehículos</label><input id="lv" inputmode="numeric" value="${e.max_vehiculos??""}"></div></div>
     <label class="check"><input type="checkbox" id="ea" ${e.activo?"checked":""}> Empresa activa (desmarca para suspender de inmediato)</label>
@@ -176,7 +187,7 @@ async function viewUsuarios(){ const j=await api("usuarios"); ALLSUCS=(await api
     ${j.usuarios.map(u=>`<tr class="click" data-id="${u.id}"><td>${esc(u.nombre)}</td><td>${esc(u.usuario)}</td><td><small>${u.sucursales.length?u.sucursales.map(sucName).map(esc).join(", "):"Todas"}</small></td>
       <td>${u.permisos.map(p=>`<span class="chip">${esc(j.permisos[p]||p)}</span>`).join(" ")}</td><td>${u.activo?'<span class="chip ok">Activo</span>':'<span class="chip bad">Inactivo</span>'}</td></tr>`).join("")}</tbody></table></div>`;
   $("unew").onclick=()=>userForm(null,j.permisos); document.querySelectorAll("#main tr[data-id]").forEach(tr=>tr.onclick=()=>userForm(j.usuarios.find(u=>u.id==tr.dataset.id),j.permisos)); }
-function userForm(u,P){ const perms=new Set(u?u.permisos:PRESETS.Vendedor), sucs=new Set(u?u.sucursales:[]);
+function userForm(u,P){ const perms=new Set(u?u.permisos:PRESETS.Conductor), sucs=new Set(u?u.sucursales:[]);
   dialog(`<h3>${u?"Editar usuario":"Nuevo usuario"}</h3><div class="row"><div class="field"><label>Nombre</label><input id="un" value="${esc(u?.nombre||"")}"></div>
     <div class="field"><label>Usuario (único en toda la plataforma)</label><input id="uu" value="${esc(u?.usuario||"")}" ${u?"disabled":""} autocapitalize="none" placeholder="ej: ana.${esc(EMP.slug)}"></div></div>
     <div class="field"><label>${u?"Nueva contraseña (vacía = no cambia)":"Contraseña (mínimo 8)"}</label><input id="up" type="password" autocomplete="new-password"></div>
@@ -231,21 +242,9 @@ async function scan({titulo="Escanear código",continuo=false,onCode}){
   }catch(e){ fallo(e); }
 }
 
-// ===================== Parqueo: utilidades =====================
+// ===================== Fechas, fotos, cámara e impresión =====================
 const TZ="America/La_Paz";
-const hora=s=>s?new Date(s).toLocaleString("es-BO",{timeZone:TZ,hour:"2-digit",minute:"2-digit"}):"";
 const fechaHora=s=>s?new Date(s).toLocaleString("es-BO",{timeZone:TZ,day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"";
-const dur=m=>{ m=Math.max(0,Math.round(m||0)); const d=Math.floor(m/1440), h=Math.floor(m%1440/60), mi=m%60; return (d?`${d} d `:"")+(d||h?`${h} h `:"")+`${mi} min`; };
-const sucActual=()=>SUCS.find(s=>s.id===SUC)||SUCS[0];
-let TAR=[], TIMER=null;
-async function cargarTarifas(){ TAR=(await api("tarifas")).tarifas; return TAR; }
-const tarDe=sid=>TAR.filter(t=>t.sucursal_id===sid&&t.activo);
-function tarifaTexto(t){ if(t.modo==="plana") return `Tarifa plana ${money(t.precio_plano)} (sin límite de tiempo)`;
-  const f=t.fraccion_min===60?"hora":`${t.fraccion_min} min`; return `${money(t.precio_hora)}/hora, cobro cada ${f}${t.tolerancia_min?` · ${t.tolerancia_min} min de tolerancia`:""}${t.minimo?` · mínimo ${money(t.minimo)}`:""}${t.tope_dia?` · máximo ${money(t.tope_dia)} por día`:""}`; }
-// misma fórmula que el servidor, para simular en pantalla
-function calcLocal(t,min){ min=Math.max(0,Math.ceil(min)); if(t.modo==="plana") return +t.precio_plano||0; if(min<=(t.tolerancia_min||0)) return 0;
-  const fr=Math.max(1,t.fraccion_min||60), pf=(t.precio_hora||0)*fr/60, tramo=m=>{ if(m<=0) return 0; let v=Math.ceil(m/fr)*pf; v=Math.max(v,t.minimo||0); return t.tope_dia>0?Math.min(v,t.tope_dia):v; };
-  return Math.round((t.tope_dia>0&&min>1440?Math.floor(min/1440)*t.tope_dia+tramo(min%1440):tramo(min))*100)/100; }
 async function fotoUrl(k){ if(!k) return ""; try{ const r=await fetch("/api/foto?k="+encodeURIComponent(k),{headers:{authorization:"Bearer "+TOKEN}}); if(!r.ok) return ""; return URL.createObjectURL(await r.blob()); }catch(e){ return ""; } }
 async function pintarFotos(root){ for(const img of root.querySelectorAll("img[data-k]")){ const u=await fotoUrl(img.dataset.k); if(u) img.src=u; else img.replaceWith(Object.assign(document.createElement("span"),{className:"muted",textContent:"Foto no disponible"})); } }
 function comprimirFoto(file){ return new Promise((res,rej)=>{ const u=URL.createObjectURL(file), im=new Image();
@@ -282,20 +281,15 @@ function camaraFoto(){ return new Promise(resolve=>{
   abrir(); }); }
 function qrSvg(texto){ try{ const q=qrcode(0,"M"); q.addData(texto); q.make(); return q.createSvgTag({cellSize:4,margin:2}); }catch(e){ return ""; } }
 function imprimir(html){ const w=window.open("","_blank","width=380,height=640"); if(!w) return toast("Permite ventanas emergentes para imprimir");
-  w.document.write(`<html><head><title>Ticket</title><style>@page{size:58mm auto;margin:3mm}body{font-family:monospace,system-ui;width:52mm;margin:0 auto;font-size:12px;color:#000}h2,h3{margin:4px 0;text-align:center}.c{text-align:center}.big{font-size:22px;font-weight:800;letter-spacing:2px}hr{border:0;border-top:1px dashed #000}table{width:100%}td.r{text-align:right}svg{width:38mm;height:38mm}</style></head><body>${html}<script>setTimeout(()=>print(),300)<\/script></body></html>`); w.document.close(); }
-function ticketHtml(t){ return `<h3>${esc(EMP.nombre)}</h3><div class="c">${esc(t.sucursal||"")}${EMP.direccion?`<br>${esc(EMP.direccion)}`:""}</div><hr><div class="c">TICKET</div><div class="c big">${esc(t.id)}</div>
-  <div class="c">${qrSvg(t.id)}</div><table><tr><td>Placa</td><td class="r"><b>${esc(t.placa)}</b></td></tr><tr><td>Tipo</td><td class="r">${esc(t.tarifa)}</td></tr><tr><td>Entrada</td><td class="r">${fechaHora(t.entrada)}</td></tr></table>
-  <hr><div class="c">Presente este ticket a la salida</div>${EMP.ticket_pie?`<div class="c">${esc(EMP.ticket_pie)}</div>`:""}`; }
-function reciboHtml(r){ return `<h3>${esc(EMP.nombre)}</h3><div class="c">${esc(r.sucursal||"")}</div><hr><table><tr><td>Ticket</td><td class="r">${esc(r.id)}</td></tr><tr><td>Placa</td><td class="r"><b>${esc(r.placa)}</b></td></tr>
-  <tr><td>Tipo</td><td class="r">${esc(r.tarifa)}</td></tr><tr><td>Entrada</td><td class="r">${fechaHora(r.entrada)}</td></tr><tr><td>Salida</td><td class="r">${fechaHora(r.salida)}</td></tr><tr><td>Tiempo</td><td class="r">${dur(r.minutos)}</td></tr></table><hr>
-  <table><tr><td><b>TOTAL</b></td><td class="r big" style="font-size:18px">${money(r.monto)}</td></tr><tr><td>Pago</td><td class="r">${({efectivo:"Efectivo",qr:"QR",otro:"Otro"})[r.metodo]||""}</td></tr></table><hr>${EMP.ticket_pie?`<div class="c">${esc(EMP.ticket_pie)}</div>`:""}`; }
+  w.document.write(`<html><head><title>Etiqueta</title><style>@page{size:58mm auto;margin:3mm}body{font-family:monospace,system-ui;width:52mm;margin:0 auto;font-size:12px;color:#000}h2,h3{margin:4px 0;text-align:center}.c{text-align:center}.big{font-size:22px;font-weight:800;letter-spacing:2px}hr{border:0;border-top:1px dashed #000}table{width:100%}td.r{text-align:right}svg{width:38mm;height:38mm}</style></head><body>${html}<script>setTimeout(()=>print(),300)<\/script></body></html>`); w.document.close(); }
 
 // ===================== Flota: datos y utilidades =====================
 let VEH=[], COND=[], PRESEL=null;
 const TIPOS_EV={combustible:["⛽","Combustible"],mantenimiento:["🔧","Mantenimiento"],lavado:["🧽","Lavado"],gasto:["🧾","Otro gasto"],kilometraje:["📍","Kilometraje"]};
 const fmtKm=n=>`${fmtQ(Math.round(n||0))} km`;
 const fechaCorta=f=>f?new Date(f+"T12:00:00Z").toLocaleDateString("es-BO",{day:"2-digit",month:"short",year:"numeric",timeZone:"UTC"}):"—";
-async function cargarVeh(){ VEH=(await api("vehiculos")).vehiculos; return VEH; }
+async function cargarVeh(){ try{ VEH=(await api("vehiculos")).vehiculos; ls.set("ag-veh-"+USER.id,JSON.stringify(VEH)); }
+  catch(e){ if(!e.offline) throw e; VEH=JSON.parse(ls.get("ag-veh-"+USER.id)||"null"); if(!VEH) throw e; toast("Sin conexión: se muestra la última lista de vehículos guardada"); } return VEH; }
 async function cargarCond(){ COND=(await api("conductores")).conductores; return COND; }
 const nivelVeh=v=>v.alertas.some(a=>a.nivel==="bad")?"bad":v.alertas.length?"warn":"ok";
 const linkQR=v=>`${location.origin}/#v=${v.codigo}`;
@@ -309,7 +303,7 @@ async function viewPanel(){ const admin=can("reportes"); let par=PRESEL?.panel_s
   $("main").innerHTML=`<div class="toolbar" style="justify-content:space-between"><h2 style="margin:0">${admin?"Dashboard de la flota":"Mi panel"}</h2>
     <div class="toolbar" style="margin:0">${SUCS.length>1?`<div><label>Parqueo</label><select id="dp"><option value="">Todos</option>${SUCS.map(s=>`<option value="${s.id}">${esc(s.nombre)}</option>`).join("")}</select></div>`:""}
     ${admin?`<div><label>Desde</label><input type="date" id="dd" value="${daysAgo(29)}"></div><div><label>Hasta</label><input type="date" id="dh" value="${today()}"></div>`:""}<div><label>Planificados a</label><select id="dz"><option value="30">30 días</option><option value="60">60 días</option><option value="90" selected>90 días</option><option value="365">1 año</option></select></div></div></div>
-    ${can("registrar")?`<div class="toolbar"><button id="preg">➕ Registrar</button><button class="sec" id="pscan">📷 Escanear QR del vehículo</button></div>`:""}<div id="dout"><p class="muted">Cargando…</p></div>`;
+    <div class="toolbar">${can("registrar")?`<button id="preg">➕ Registrar</button><button class="sec" id="pscan">📷 Escanear QR del vehículo</button>`:""}<button class="sec" id="pwa" title="Abre WhatsApp con el resumen de vencidos, próximos y documentos">💬 Resumen por WhatsApp</button></div><div id="dout"><p class="muted">Cargando…</p></div>`;
   if($("dp")) $("dp").value=par;
   const load=async()=>{ const p=$("dp")?.value||""; hor=+$("dz").value; VEH=(await api("vehiculos")).vehiculos;
     const j=await api(`dashboard?${p?"sucursal_id="+p+"&":""}${admin?`desde=${$("dd").value}&hasta=${$("dh").value}`:""}`); if(j.vacio){ $("dout").innerHTML='<div class="card"><p class="muted">Sin parqueos asignados.</p></div>'; return; }
@@ -339,7 +333,14 @@ async function viewPanel(){ const admin=can("reportes"); let par=PRESEL?.panel_s
     }
     $("dout").querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{ const [vi,pi]=b.dataset.r.split(":").map(Number); PRESEL={vehiculo_id:vi,tipo:"mantenimiento",plan_id:pi}; go("registrar"); });
     $("dout").querySelectorAll("[data-rv]").forEach(b=>b.onclick=()=>{ PRESEL={vehiculo_id:+b.dataset.rv}; go("registrar"); });
-    $("dout").querySelectorAll("[data-ps]").forEach(tr=>tr.onclick=()=>{ if($("dp")){ $("dp").value=tr.dataset.ps; load(); } }); };
+    $("dout").querySelectorAll("[data-ps]").forEach(tr=>tr.onclick=()=>{ if($("dp")){ $("dp").value=tr.dataset.ps; load(); } });
+    const pwa=$("pwa"); if(pwa) pwa.onclick=()=>{ const Ls=[`*${EMP.nombre}* · Resumen de flota al ${fechaCorta(j.hoy)}`], ve=plan.filter(x=>x.estado==="vencido"), pr=plan.filter(x=>x.estado!=="vencido");
+      const li=x=>`• ${x.placa}: ${x.plan}${x.faltaKm!=null?` (${x.faltaKm<=0?"pasado "+fmtKm(-x.faltaKm):"faltan "+fmtKm(x.faltaKm)})`:""}${x.estimada?` · ${fechaCorta(x.estimada)}`:""}`;
+      if(ve.length) Ls.push("",`⛔ *Mantenimientos vencidos (${ve.length})*`,...ve.map(li));
+      if(pr.length) Ls.push("",`🔧 *Próximos ${hor} días (${pr.length})*`,...pr.slice(0,15).map(li),...(pr.length>15?[`… y ${pr.length-15} más`]:[]));
+      if(j.documentos.length) Ls.push("",`📄 *Documentos (${j.documentos.length})*`,...j.documentos.map(x=>`• ${x.placa}: ${x.doc} ${x.estado==="vencido"?`vencido hace ${-x.dias} días`:`vence en ${x.dias} días`} (${fechaCorta(x.fecha)})`));
+      if(Ls.length===1) Ls.push("","✅ Sin mantenimientos ni documentos pendientes.");
+      const t=(EMP.whatsapp||"").replace(/\D/g,""); open(`https://wa.me/${t.length===8?"591"+t:t}?text=${encodeURIComponent(Ls.join("\n"))}`,"_blank","noopener"); }; };
   ["#dp","#dd","#dh","#dz"].forEach(s=>{ const e=$("main").querySelector(s); if(e) e.onchange=()=>load().catch(x=>toast(x.message)); });
   if($("preg")) $("preg").onclick=()=>go("registrar"); if($("pscan")) $("pscan").onclick=()=>escanearVeh(); PRESEL=null;
   await load(); }
@@ -384,8 +385,10 @@ async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.est
     const body={tipo,vehiculo_id:+$("rv").value,km:g("fk"),litros:g("fl"),monto:g("fm"),lleno:$("fll")?$("fll").checked:true,proveedor:$("fp")?.value||"",detalle:$("fd")?.value||"",categoria:$("fc")?.value||"",plan_id:$("fpl")?.value||null,fecha:$("ff")?.value||"",foto1:f1,foto2:f2,confirmar_km:confirmar};
     $("rok").disabled=true;
     try{ const r=await api("eventos",{body}); beepScan();
-      toast(r.rendimiento?`Guardado · Rendimiento ${fmtN(r.rendimiento)} km/l`:"Guardado"); if(r.alertas?.length) alert("⚠️ Atención:\n"+r.alertas.join("\n")); PRESEL={vehiculo_id:body.vehiculo_id,tipo}; go("registrar"); }
-    catch(e){ $("rok").disabled=false; if(/menor al último|más que el último/.test(e.message)&&confirm(e.message+"\n\n¿Guardar igual?")) return guardar(true); $("re").textContent=e.message; } };
+      toast(r.rendimiento?`Guardado · Rendimiento ${fmtN(r.rendimiento)} km/l`:"Guardado"); if(r.alertas?.length) await avisar(r.alertas.join("\n"),"⚠️ Atención"); PRESEL={vehiculo_id:body.vehiculo_id,tipo}; go("registrar"); }
+    catch(e){ $("rok").disabled=false;
+      if(e.offline){ if(encolar(body)){ toast("Sin conexión: el registro quedó guardado en este equipo y se enviará solo cuando vuelva la señal"); PRESEL={vehiculo_id:body.vehiculo_id,tipo}; return go("registrar"); } return $("re").textContent="Sin conexión y sin espacio para guardar el registro en este equipo"; }
+      if(/menor al último|más que el último/.test(e.message)&&await confirmar(e.message+"\n\n¿Guardar igual?",{ok:"Guardar igual"})) return guardar(true); $("re").textContent=e.message; } };
   $("rok").onclick=()=>guardar(false); }
 
 // ===================== Vehículos =====================
@@ -397,14 +400,14 @@ async function viewVehiculos(){ await cargarVeh(); const P=USER.plan||{};
     $("vgrid").innerHTML=VEH.filter(v=>(b||v.estado!=="baja")&&(!q||(v.placa+" "+v.marca+" "+v.modelo+" "+(v.conductor||"")).toLowerCase().includes(q))).map(v=>{ const n=nivelVeh(v);
       return `<div class="card click" data-v="${v.id}" style="cursor:pointer;padding:12px"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:1.25rem;letter-spacing:1px">${esc(v.placa)}</b>
         <span class="chip ${v.estado==="baja"?"":v.estado==="taller"?"warn":n}">${v.estado==="baja"?"Baja":v.estado==="taller"?"En taller":n==="ok"?"Al día":v.alertas.length+" alerta"+(v.alertas.length>1?"s":"")}</span></div>
-        <div class="muted">${esc([v.marca,v.modelo,v.anio].filter(Boolean).join(" "))}${SUCS.length>1?` · ${esc(v.sucursal)}`:""}</div><div>${fmtKm(v.km_actual)}${v.rendimiento_ult?` · ${fmtN(v.rendimiento_ult)} km/l`:""}</div>
+        <div class="muted">${esc([v.marca,v.modelo,v.anio].filter(Boolean).join(" "))}${SUCS.length>1?` · ${esc(v.sucursal)}`:""}</div><div>${fmtKm(v.km_actual)}${v.rendimiento_ult?` · ${fmtN(v.rendimiento_ult)} km/l`:""}${v.costo_km_30d?` · ${money(v.costo_km_30d)}/km`:""}</div>
         <small class="muted">${v.conductor?"👤 "+esc(v.conductor):"Sin conductor asignado"}</small></div>`; }).join("")||'<p class="muted">Sin vehículos.</p>';
     $("vgrid").querySelectorAll("[data-v]").forEach(x=>x.onclick=()=>vehiculoDetalle(+x.dataset.v)); };
   $("vq").oninput=draw; $("vb").onchange=draw; draw(); if($("vnew")) $("vnew").onclick=()=>vehiculoForm(null); }
 function vehiculoDetalle(id){ const v=VEH.find(x=>x.id===id); if(!v) return;
   const doc=(n,f,d)=>`<tr><td>${n}</td><td>${fechaCorta(f)}</td><td>${d?`<span class="chip ${d.estado==="ok"?"ok":d.estado==="proximo"?"warn":"bad"}">${d.estado==="vencido"?"Vencido":d.estado==="proximo"?`${d.dias} días`:"Vigente"}</span>`:'<span class="muted">Sin fecha</span>'}</td></tr>`;
   dialog(`<div style="display:flex;gap:12px;align-items:center">${v.foto?`<img data-k="${esc(v.foto)}" alt="" style="width:90px;height:68px;object-fit:cover;border-radius:8px">`:""}<div><h3 style="margin:0">${esc(v.placa)}</h3>
-    <div class="muted">${esc([v.marca,v.modelo,v.anio,v.tipo].filter(Boolean).join(" · "))} · ${esc(v.combustible)}</div><div>${fmtKm(v.km_actual)}${v.conductor?` · 👤 ${esc(v.conductor)}`:""}</div></div></div>
+    <div class="muted">${esc([v.marca,v.modelo,v.anio,v.tipo].filter(Boolean).join(" · "))} · ${esc(v.combustible)}</div><div>${fmtKm(v.km_actual)}${v.conductor?` · 👤 ${esc(v.conductor)}`:""}</div><small class="muted">Últimos 30 días: ${money(v.gasto_30d)} · ${fmtKm(v.km_30d)}${v.costo_km_30d?` · ${money(v.costo_km_30d)} por km`:""}${v.precio_litro_ult?` · última carga ${money(v.precio_litro_ult)}/L`:""}</small></div></div>
     ${v.alertas.length?`<div style="margin-top:10px">${v.alertas.map(a=>`<div><span class="chip ${a.nivel}">${a.nivel==="bad"?"Vencido":"Atención"}</span> ${esc(a.texto)}</div>`).join("")}</div>`:""}
     <h3 style="margin-top:14px">Mantenimiento preventivo</h3><div class="tbl"><table><thead><tr><th>Plan</th><th>Cada</th><th>Último</th><th>Próximo</th><th></th></tr></thead><tbody>
     ${v.planes.map(p=>`<tr><td>${esc(p.nombre)}</td><td><small>${p.cada_km?fmtKm(p.cada_km):""}${p.cada_km&&p.cada_dias?" o ":""}${p.cada_dias?p.cada_dias+" días":""}</small></td><td><small>${p.ultima_fecha?fechaCorta(p.ultima_fecha):"—"}${p.ultimo_km?"<br>"+fmtKm(p.ultimo_km):""}</small></td>
@@ -426,7 +429,7 @@ async function vehiculoForm(v){ await cargarCond(); let foto;
     <div class="row"><div class="field"><label>Tipo</label><input id="vt" list="vtl" value="${esc(v?.tipo||"")}"><datalist id="vtl"><option value="Camioneta"><option value="Automóvil"><option value="Furgón"><option value="Camión"><option value="Motocicleta"></datalist></div>
       <div class="field"><label>Combustible</label><select id="vc">${["Gasolina","Diésel","GNV","Eléctrico"].map(x=>`<option ${x===(v?.combustible||"Gasolina")?"selected":""}>${x}</option>`).join("")}</select></div></div>
     <div class="row"><div class="field"><label>Tanque (litros)</label><input id="vta" inputmode="decimal" value="${v?.tanque_l||""}"></div><div class="field"><label>Rendimiento esperado (km/l)</label><input id="vre" inputmode="decimal" value="${v?.rendimiento_esp||""}"></div>
-      ${v?"":`<div class="field"><label>Kilometraje actual</label><input id="vkm" inputmode="numeric"></div>`}</div>
+      <div class="field"><label>Kilometraje actual${v?" (corregir si está mal)":""}</label><input id="vkm" inputmode="numeric" value="${v?Math.round(v.km_actual):""}"></div></div>
     <div class="row"><div class="field"><label>Conductor asignado</label><select id="vco"><option value="">Sin conductor</option>${COND.filter(c=>c.activo).map(c=>`<option value="${c.id}" ${c.id===v?.conductor_id?"selected":""}>${esc(c.nombre)}</option>`).join("")}</select></div>
       <div class="field"><label>Estado</label><select id="ves">${[["activo","Activo"],["taller","En taller"],["baja","Dado de baja"]].map(([k,t])=>`<option value="${k}" ${k===(v?.estado||"activo")?"selected":""}>${t}</option>`).join("")}</select></div></div>
     <div class="row"><div class="field"><label>SOAT vence</label><input type="date" id="vso" value="${v?.soat_vence||""}"></div><div class="field"><label>Inspección técnica vence</label><input type="date" id="vit" value="${v?.itv_vence||""}"></div><div class="field"><label>Seguro vence</label><input type="date" id="vse" value="${v?.seguro_vence||""}"></div></div>
@@ -459,21 +462,44 @@ async function viewMantenimiento(){ await cargarVeh(); const ord={vencido:0,prox
 
 // ===================== Historial =====================
 async function viewHistorial(){ await cargarVeh(); const pre=PRESEL||{}; PRESEL=null; const rep=can("reportes");
-  $("main").innerHTML=`<h2>Historial</h2>${rep?"":'<p class="muted">Ves los registros que hiciste tú.</p>'}<div class="toolbar"><div><label>Vehículo</label><select id="hv"><option value="">Todos</option>${VEH.map(v=>`<option value="${v.id}" ${v.id===pre.vehiculo_id?"selected":""}>${esc(v.placa)}</option>`).join("")}</select></div>
+  $("main").innerHTML=`<h2>Historial</h2>${rep?"":'<p class="muted">Ves los registros que hiciste tú. Puedes corregirlos hasta 24 horas después.</p>'}<div class="toolbar"><div><label>Vehículo</label><select id="hv"><option value="">Todos</option>${VEH.map(v=>`<option value="${v.id}" ${v.id===pre.vehiculo_id?"selected":""}>${esc(v.placa)}</option>`).join("")}</select></div>
     <div><label>Tipo</label><select id="ht"><option value="">Todos</option>${Object.entries(TIPOS_EV).map(([k,[i,t]])=>`<option value="${k}">${i} ${t}</option>`).join("")}</select></div>
-    <div><label>Desde</label><input type="date" id="hd" value="${daysAgo(30)}"></div><div><label>Hasta</label><input type="date" id="hh" value="${today()}"></div><button class="sec" id="hgo">Ver</button></div>
-    <div class="card tbl"><table><thead><tr><th>Fecha</th><th>Vehículo</th><th>Tipo</th><th>Detalle</th><th class="n">Km</th><th class="n">Monto</th></tr></thead><tbody id="hrows"></tbody></table></div>`;
-  const load=async()=>{ const j=await api(`eventos?vehiculo_id=${$("hv").value}&tipo=${$("ht").value}&desde=${$("hd").value}&hasta=${$("hh").value}`);
-    $("hrows").innerHTML=j.eventos.map(e=>`<tr class="click" data-id="${e.id}" style="${e.anulado?"opacity:.5;text-decoration:line-through":""}"><td>${fechaHora(e.fecha)}</td><td><b>${esc(e.placa)}</b></td><td>${TIPOS_EV[e.tipo][0]} ${TIPOS_EV[e.tipo][1]}</td>
-      <td><small>${e.tipo==="combustible"?`${fmtN(e.litros)} L${e.rendimiento?` · <b>${fmtN(e.rendimiento)} km/l</b>`:""}`:esc(e.plan||e.categoria||e.detalle||"")}${e.proveedor?` · ${esc(e.proveedor)}`:""}</small>${e.alerta?`<br><span class="chip warn">${esc(e.alerta)}</span>`:""}</td>
-      <td class="n">${e.km!=null?fmtQ(Math.round(e.km)):""}</td><td class="n">${e.monto?money(e.monto):""}</td></tr>`).join("")||'<tr><td colspan="6" class="muted">Sin registros.</td></tr>';
-    $("hrows").querySelectorAll("tr[data-id]").forEach(tr=>tr.onclick=()=>{ const e=j.eventos.find(x=>x.id==tr.dataset.id);
-      dialog(`<h3>${TIPOS_EV[e.tipo][0]} ${TIPOS_EV[e.tipo][1]} · ${esc(e.placa)}</h3><p class="muted">${fechaHora(e.fecha)} · ${esc(e.usuario||"")}${e.conductor?` · Conductor: ${esc(e.conductor)}`:""}</p>
-        <div class="tbl"><table>${[["Kilometraje",e.km!=null?fmtKm(e.km):""],["Litros",e.litros?fmtN(e.litros):""],["Rendimiento",e.rendimiento?fmtN(e.rendimiento)+" km/l":""],["Monto",e.monto?money(e.monto):""],["Plan",e.plan||""],["Tipo de gasto",e.categoria||""],["Proveedor",e.proveedor||""],["Detalle",e.detalle||""],["Alerta",e.alerta||""]].filter(x=>x[1]).map(([a,b])=>`<tr><td>${a}</td><td>${esc(b)}</td></tr>`).join("")}</table></div>
-        <div class="row" style="margin-top:10px">${[e.foto1,e.foto2].filter(Boolean).map(k=>`<img data-k="${esc(k)}" alt="Foto" style="max-width:100%;border-radius:8px">`).join("")}</div>
-        <div class="acts">${rep&&!e.anulado?`<button class="danger" id="han" style="margin-right:auto">Anular</button>`:""}<button id="hx">Cerrar</button></div>`, B=>{ pintarFotos(B); B.querySelector("#hx").onclick=closeDlg;
-        const an=B.querySelector("#han"); if(an) an.onclick=async()=>{ const m=prompt("Motivo de la anulación:"); if(!m) return; try{ await api("eventos",{body:{id:e.id,anular:true,motivo:m}}); closeDlg(); toast("Registro anulado"); load(); }catch(x){ toast(x.message); } }; }); }); };
-  $("hgo").onclick=()=>load().catch(e=>toast(e.message)); ["#hv","#ht"].forEach(s=>$("main").querySelector(s).onchange=$("hgo").onclick); await load(); }
+    <div><label>Desde</label><input type="date" id="hd" value="${daysAgo(30)}"></div><div><label>Hasta</label><input type="date" id="hh" value="${today()}"></div><button class="sec" id="hgo">Ver</button><button class="sec" id="hcsv">⬇️ CSV</button></div>
+    <div class="card tbl"><table><thead><tr><th>Fecha</th><th>Vehículo</th><th>Tipo</th><th>Detalle</th><th class="n">Km</th><th class="n">Monto</th></tr></thead><tbody id="hrows"></tbody></table><div id="hmas" style="text-align:center;margin-top:10px"></div></div>`;
+  let EV=[], pag=0;
+  const filtro=()=>`vehiculo_id=${$("hv").value}&tipo=${$("ht").value}&desde=${$("hd").value}&hasta=${$("hh").value}`;
+  const fila=e=>`<tr class="click" data-id="${e.id}" style="${e.anulado?"opacity:.5;text-decoration:line-through":""}"><td>${fechaHora(e.fecha)}</td><td><b>${esc(e.placa)}</b></td><td>${TIPOS_EV[e.tipo][0]} ${TIPOS_EV[e.tipo][1]}</td>
+      <td><small>${e.tipo==="combustible"?`${fmtN(e.litros)} L${e.monto&&e.litros?` · ${fmtN(e.monto/e.litros)}/L`:""}${e.rendimiento?` · <b>${fmtN(e.rendimiento)} km/l</b>`:""}`:esc(e.plan||e.categoria||e.detalle||"")}${e.proveedor?` · ${esc(e.proveedor)}`:""}</small>${e.alerta?`<br><span class="chip warn">${esc(e.alerta)}</span>`:""}</td>
+      <td class="n">${e.km!=null?fmtQ(Math.round(e.km)):""}</td><td class="n">${e.monto?money(e.monto):""}</td></tr>`;
+  const load=async masPag=>{ if(!masPag){ pag=0; EV=[]; } const j=await api(`eventos?${filtro()}&pagina=${pag}`); EV=EV.concat(j.eventos);
+    $("hrows").innerHTML=EV.map(fila).join("")||'<tr><td colspan="6" class="muted">Sin registros.</td></tr>';
+    $("hmas").innerHTML=j.mas?`<button class="sec" id="hmasb">Cargar más</button>`:(EV.length>200?`<small class="muted">${EV.length} registros</small>`:"");
+    const mb=$("hmasb"); if(mb) mb.onclick=()=>{ pag++; load(true).catch(e=>toast(e.message)); };
+    $("hrows").querySelectorAll("tr[data-id]").forEach(tr=>tr.onclick=()=>detalleEvento(EV.find(x=>x.id==tr.dataset.id))); };
+  const detalleEvento=e=>{ const propio=e.usuario_id===USER.id&&Date.now()-new Date(String(e.creado).replace(" ","T")+"Z")<24*3600e3, puedeEditar=!e.anulado&&(rep||propio);
+    dialog(`<h3>${TIPOS_EV[e.tipo][0]} ${TIPOS_EV[e.tipo][1]} · ${esc(e.placa)}</h3><p class="muted">${fechaHora(e.fecha)} · ${esc(e.usuario||"")}${e.conductor?` · Conductor: ${esc(e.conductor)}`:""}</p>
+      <div class="tbl"><table>${[["Kilometraje",e.km!=null?fmtKm(e.km):""],["Litros",e.litros?fmtN(e.litros):""],["Precio por litro",e.litros&&e.monto?money(e.monto/e.litros):""],["Rendimiento",e.rendimiento?fmtN(e.rendimiento)+" km/l":""],["Monto",e.monto?money(e.monto):""],["Plan",e.plan||""],["Tipo de gasto",e.categoria||""],["Proveedor",e.proveedor||""],["Detalle",e.detalle||""],["Alerta",e.alerta||""]].filter(x=>x[1]).map(([a,b])=>`<tr><td>${a}</td><td>${esc(b)}</td></tr>`).join("")}</table></div>
+      <div class="row" style="margin-top:10px">${[e.foto1,e.foto2].filter(Boolean).map(k=>`<img data-k="${esc(k)}" alt="Foto" style="max-width:100%;border-radius:8px">`).join("")}</div>
+      <div class="acts">${rep&&!e.anulado?`<button class="danger" id="han" style="margin-right:auto">Anular</button>`:""}${puedeEditar?`<button class="sec" id="hed">✏️ Corregir</button>`:""}<button id="hx">Cerrar</button></div>`, B=>{ pintarFotos(B); B.querySelector("#hx").onclick=closeDlg;
+      const ed=B.querySelector("#hed"); if(ed) ed.onclick=()=>editarEvento(e);
+      const an=B.querySelector("#han"); if(an) an.onclick=async()=>{ const m=await pregunta({titulo:"Anular registro",texto:"El registro queda tachado y se recalculan el kilometraje y el rendimiento del vehículo.",input:"Motivo de la anulación",ok:"Anular",peligro:true});
+        if(m===null) return; if(!m) return toast("Escribe el motivo para anular"); try{ await api("eventos",{body:{id:e.id,anular:true,motivo:m}}); closeDlg(); toast("Registro anulado"); load(); }catch(x){ toast(x.message); } }; }); };
+  const editarEvento=e=>{ const t=e.tipo, f=(id,l,v,extra="")=>`<div class="field"><label>${l}</label><input id="${id}" value="${esc(v??"")}" ${extra}></div>`;
+    dialog(`<h3>✏️ Corregir ${TIPOS_EV[t][1].toLowerCase()} · ${esc(e.placa)}</h3><div class="row">${f("ek","Kilometraje"+(["combustible","kilometraje"].includes(t)?" *":""),e.km!=null?Math.round(e.km):"",'inputmode="numeric"')}
+      ${t==="combustible"?f("el","Litros *",e.litros,'inputmode="decimal"'):""}${t!=="kilometraje"?f("em",`Monto (${esc(EMP.moneda)})`,e.monto||"",'inputmode="decimal"'):""}</div>
+      ${t==="combustible"?`<label class="check"><input type="checkbox" id="ell" ${e.lleno?"checked":""}> Tanque lleno</label>`:""}
+      <div class="row">${f("ef","Fecha",String(e.fecha).slice(0,10),`type="date" max="${today()}"`)}${t==="gasto"?f("ec","Tipo de gasto",e.categoria):f("ep",t==="mantenimiento"?"Taller":t==="combustible"?"Estación de servicio":"Proveedor",e.proveedor)}</div>
+      ${t==="gasto"?f("ep","Proveedor",e.proveedor):""}${f("ed","Detalle",e.detalle)}
+      <p class="muted">Al guardar se recalculan el kilometraje actual del vehículo, el rendimiento de las cargas y la fecha del último mantenimiento.</p>
+      <div class="err" id="ee"></div><div class="acts"><button class="sec" id="ex">Cancelar</button><button id="eok">Guardar</button></div>`, B=>{
+      B.querySelector("#ex").onclick=()=>detalleEvento(e);
+      B.querySelector("#eok").onclick=async()=>{ try{ await api("eventos",{body:{id:e.id,editar:true,km:val(B,"#ek").replace(",","."),litros:val(B,"#el").replace(",","."),monto:val(B,"#em").replace(",","."),lleno:B.querySelector("#ell")?B.querySelector("#ell").checked:true,fecha:val(B,"#ef"),proveedor:val(B,"#ep"),categoria:val(B,"#ec"),detalle:val(B,"#ed")}});
+        closeDlg(); toast("Registro corregido"); load(); }catch(x){ B.querySelector("#ee").textContent=x.message; } }; }); };
+  $("hgo").onclick=()=>load().catch(e=>toast(e.message)); ["#hv","#ht"].forEach(s=>$("main").querySelector(s).onchange=$("hgo").onclick);
+  $("hcsv").onclick=async()=>{ try{ const j=await api(`eventos?${filtro()}&csv=1`); const h=["Fecha","Placa","Tipo","Km","Litros","Precio/L","km/l","Monto","Plan","Categoría","Proveedor","Detalle","Conductor","Registró","Alerta","Anulado"];
+      const c=s=>'"'+String(s??"").replace(/"/g,'""')+'"'; const csv=[h.join(";"),...j.eventos.map(e=>[fechaHora(e.fecha),e.placa,TIPOS_EV[e.tipo][1],e.km!=null?Math.round(e.km):"",e.litros||"",e.litros&&e.monto?(e.monto/e.litros).toFixed(2):"",e.rendimiento||"",e.monto||"",e.plan||"",e.categoria||"",e.proveedor||"",e.detalle||"",e.conductor||"",e.usuario||"",e.alerta||"",e.anulado?"Sí":""].map(c).join(";"))].join("\n");
+      descargar(csv,`historial_${$("hd").value}_${$("hh").value}.csv`); if(j.mas) toast("Se descargaron los primeros 5000 registros. Acorta el rango de fechas para ver el resto."); }catch(e){ toast(e.message); } };
+  await load(); }
 
 // ===================== Reportes =====================
 async function viewReportes(){
@@ -493,7 +519,7 @@ async function viewReportes(){
   $("rgo").onclick=()=>load().catch(e=>toast(e.message));
   $("rcsv").onclick=()=>{ if(!J) return; const h=["Placa","Km","Litros","km/l","Combustible","Mantenimiento","Lavados","Otros","Total"];
     const csv=[h.join(";"),...J.vehiculos.map(v=>[v.placa,Math.round(v.km||0),v.litros,v.rendimiento?.toFixed(2)||"",v.combustible,v.mantenimiento,v.lavado,v.gastos,v.total].join(";"))].join("\n");
-    const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv"})); a.download=`flota_${$("rd").value}_${$("rh").value}.csv`; a.click(); };
+    descargar(csv,`flota_${$("rd").value}_${$("rh").value}.csv`); };
   await load(); }
 
 // ===================== Conductores =====================
@@ -570,5 +596,35 @@ function endTour(done){ if(!TOUR) return; const {view,block,hole,tip,after}=TOUR
   marcarTour(view); if(done&&after) after(); }
 document.addEventListener("keydown",e=>{ if(!TOUR) return; if(e.key==="Escape") endTour(true); else if(e.key==="ArrowRight") nextTour(); else if(e.key==="ArrowLeft"&&TOUR.i){ TOUR.i--; drawTour(); } });
 addEventListener("resize",()=>{ if(TOUR) drawTour(); });
+
+// ===================== Sin conexión: cola de registros =====================
+// Los registros que no se pudieron enviar quedan en este equipo y se reintentan al volver la señal.
+const colaKey=()=>`ag-cola-${USER?.id}`;
+const cola={get:()=>{ try{ return JSON.parse(ls.get(colaKey())||"[]"); }catch(e){ return []; } }, set:a=>ls.set(colaKey(),JSON.stringify(a))};
+function encolar(body){ const a=cola.get(), it={...body,_t:Date.now()}; a.push(it);
+  if(!cola.set(a)){ it.foto1=it.foto2=null; if(!cola.set(a)) return false; toast("Sin espacio para las fotos: el registro se guardó sin fotos"); }
+  pintarCola(); return true; }
+let ENVIANDO=false;
+async function enviarCola(manual){ if(ENVIANDO||!USER||USER.super) return; const a=cola.get(); if(!a.length) return;
+  if(!navigator.onLine){ if(manual) toast("Todavía no hay conexión"); return; }
+  ENVIANDO=true; const resto=[]; let ok=0;
+  for(let i=0;i<a.length;i++){ if(a[i]._err){ resto.push(a[i]); continue; } const {_t,_err,...body}=a[i];
+    try{ await api("eventos",{body}); ok++; }
+    catch(e){ if(e.offline){ resto.push(...a.slice(i)); break; } resto.push({...a[i],_err:e.message}); } }
+  cola.set(resto); ENVIANDO=false; pintarCola();
+  if(ok){ toast(`Se enviaron ${ok} registro${ok>1?"s":""} pendiente${ok>1?"s":""}`); if(CUR) go(CUR); }
+  else if(manual&&resto.some(x=>x._err)) toast("Hay registros con error: revísalos en Ver"); }
+function pintarCola(){ let b=$("colaBar"); if(!b){ b=document.createElement("div"); b.id="colaBar"; $("main").before(b); } const a=USER&&!USER.super?cola.get():[], errs=a.filter(x=>x._err).length;
+  b.innerHTML=a.length?`<div style="max-width:1200px;margin:12px auto 0;padding:0 16px"><div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-color:var(--warn);background:var(--warn-soft);color:var(--warn);font-weight:600;padding:10px 14px">📶 ${a.length} registro${a.length>1?"s":""} pendiente${a.length>1?"s":""} de enviar${errs?` (${errs} con error)`:""}<span style="flex:1"></span><button class="sec" id="colaVer">Ver</button><button class="sec" id="colaEnv">Reintentar</button></div></div>`:"";
+  const v=$("colaVer"); if(v) v.onclick=verCola; const en=$("colaEnv"); if(en) en.onclick=()=>enviarCola(true); }
+function verCola(){ const a=cola.get();
+  dialog(`<h3>📶 Registros pendientes</h3><p class="muted">Se guardaron en este equipo porque no había conexión. Se envían solos cuando vuelve la señal. Los que tienen error se envían con "Enviar igual" o se descartan.</p>
+    <div class="tbl"><table>${a.map((x,i)=>{ const v=VEH.find(y=>y.id===x.vehiculo_id); return `<tr><td>${TIPOS_EV[x.tipo]?.[0]||""} <b>${esc(v?.placa||"#"+x.vehiculo_id)}</b> ${TIPOS_EV[x.tipo]?.[1]||""}<br><small class="muted">${new Date(x._t).toLocaleString("es-BO")}${x.km?` · ${x.km} km`:""}${x.monto?` · ${money(x.monto)}`:""}${x.foto1||x.foto2?" · 📷":""}</small>${x._err?`<br><span class="chip bad">${esc(x._err)}</span>`:""}</td>
+      <td class="right" style="white-space:nowrap">${x._err?`<button class="sec" data-f="${i}">Enviar igual</button> `:""}<button class="link" data-d="${i}">Descartar</button></td></tr>`; }).join("")||'<tr><td class="muted">Nada pendiente.</td></tr>'}</table></div><div class="acts"><button id="cx">Cerrar</button></div>`, B=>{
+    B.querySelector("#cx").onclick=closeDlg;
+    B.querySelectorAll("[data-d]").forEach(b=>b.onclick=async()=>{ if(!await confirmar("¿Descartar este registro? No se enviará.",{ok:"Descartar",peligro:true})) return; const q=cola.get(); q.splice(+b.dataset.d,1); cola.set(q); pintarCola(); verCola(); });
+    B.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{ const q=cola.get(), it=q[+b.dataset.f]; it.confirmar_km=true; delete it._err; cola.set(q); closeDlg(); enviarCola(true); }); }); }
+addEventListener("online",()=>enviarCola(false));
+if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
 
 boot();

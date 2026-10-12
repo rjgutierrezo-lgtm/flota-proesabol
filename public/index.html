@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>FlotaControl</title>
 <meta name="description" content="Control de flota: mantenimientos, combustible y costos">
-<meta name="theme-color" content="#1D4ED8"><link rel="icon" href="/icon.svg" type="image/svg+xml"><link rel="icon" href="/favicon.png" sizes="32x32">
+<meta name="theme-color" content="#1D4ED8"><meta name="color-scheme" content="light dark"><link rel="icon" href="/icon.svg" type="image/svg+xml"><link rel="icon" href="/favicon.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="manifest" href="/manifest.json">
 <meta property="og:title" content="FlotaControl"><meta property="og:description" content="Control de flota: mantenimientos, combustible y costos"><meta property="og:image" content="/tarjeta.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -27,9 +27,11 @@
 <section id="vLogin" class="auth hidden"><div class="card">
   <picture><source srcset="/logo-oscuro.svg" media="(prefers-color-scheme: dark)"><img src="/logo.svg" alt="FlotaControl" style="width:100%;max-width:300px;display:block;margin:0 auto 14px"></picture>
   <h2 id="loginTitle">Ingresar</h2>
-  <div class="field"><label>Usuario</label><input id="lgUser" autocapitalize="none" autocomplete="username"></div>
-  <div class="field"><label>Contraseña</label><input id="lgPass" type="password" autocomplete="current-password"></div>
-  <div class="err" id="lgErr"></div><button id="lgBtn" style="width:100%">Entrar</button>
+  <form id="lgForm" novalidate>
+  <div class="field"><label for="lgUser">Usuario</label><input id="lgUser" name="username" autocapitalize="none" autocomplete="username" required></div>
+  <div class="field"><label for="lgPass">Contraseña</label><input id="lgPass" name="password" type="password" autocomplete="current-password" required></div>
+  <div class="err" id="lgErr"></div><button id="lgBtn" type="submit" style="width:100%">Entrar</button>
+  </form>
 </div></section>
 <!-- App -->
 <div id="vApp" class="hidden">
@@ -38,6 +40,7 @@
   <main id="main"></main>
 </div>
 <dialog id="dlg"><div class="dlg" id="dlgBody"></div></dialog>
+<dialog id="dlg2"><div class="dlg" id="dlg2Body"></div></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="qrcode.js"></script>
 <script src="app.js"></script>

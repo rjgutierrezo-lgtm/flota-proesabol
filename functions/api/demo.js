@@ -1,5 +1,5 @@
 // POST (solo el dueño de la plataforma) → crea o regenera la empresa "Transportes Demo" con 6 meses de datos ficticios
-import { json, err, sesion, hashPass, randomHex, PERMISOS, PLANES_INICIALES } from "../../lib/db.js";
+import { json, err, sesion, hashPass, randomHex, PERMISOS, PLANES_INICIALES, ITER } from "../../lib/db.js";
 const SLUG = "demo-flota", CLAVE = "demo1234";
 export async function onRequestPost({ request, env }) {
   const u = await sesion(request, env); if (!u?.super) return err("Solo el dueño de la plataforma", 403);
@@ -16,8 +16,8 @@ export async function onRequestPost({ request, env }) {
   const p2 = (await env.DB.prepare("INSERT INTO sucursales(empresa_id, nombre, direccion) VALUES(?, 'Parqueo Norte', 'Carretera a Warnes km 8')").bind(eid).run()).meta.last_row_id;
   const s1 = randomHex(16), s2 = randomHex(16), hoyD = new Date(), dia = 864e5, iso = d => new Date(d).toISOString(), f10 = d => iso(d).slice(0, 10), mas = n => f10(hoyD.getTime() + n * dia);
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, permisos, sucursales) VALUES(?,?,?,?,?,?,?)").bind(eid, "demo.admin", "Ana Demo (jefa de flota)", await hashPass(CLAVE, s1), s1, JSON.stringify(Object.keys(PERMISOS)), "[]"),
-    env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, permisos, sucursales) VALUES(?,?,?,?,?,?,?)").bind(eid, "demo.chofer", "Carlos Demo (conductor)", await hashPass(CLAVE, s2), s2, JSON.stringify(["registrar"]), JSON.stringify([p2]))]);
+    env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, permisos, sucursales, iter) VALUES(?,?,?,?,?,?,?,?)").bind(eid, "demo.admin", "Ana Demo (jefa de flota)", await hashPass(CLAVE, s1), s1, JSON.stringify(Object.keys(PERMISOS)), "[]", ITER),
+    env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, permisos, sucursales, iter) VALUES(?,?,?,?,?,?,?,?)").bind(eid, "demo.chofer", "Carlos Demo (conductor)", await hashPass(CLAVE, s2), s2, JSON.stringify(["registrar"]), JSON.stringify([p2]), ITER)]);
   const conds = [["Carlos Mamani", "C", mas(12)], ["Luis Rojas", "C", mas(400)], ["Miguel Vargas", "B", mas(220)], ["José Flores", "C", mas(-5)], ["Pedro Gutiérrez", "B", mas(300)]];
   const cid = []; for (const [n, c, v] of conds) cid.push((await env.DB.prepare("INSERT INTO conductores(empresa_id, nombre, ci, telefono, licencia_cat, licencia_vence) VALUES(?,?,?,?,?,?)").bind(eid, n, String(4000000 + cid.length * 13571), "7" + (1000000 + cid.length * 2471), c, v).run()).meta.last_row_id);
   // 3) vehículos: placa, parqueo, marca, modelo, año, tipo, combustible, tanque, km/l esperado, km/día, conductor, soat, itv, "problema"

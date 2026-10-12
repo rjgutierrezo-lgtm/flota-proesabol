@@ -4,7 +4,7 @@
 // POST {id, nombre?, activo?, vence?, plan?, precio?, telefono_admin?, max_sucursales?, max_usuarios?, } → edita
 // POST {id, pago:{monto, meses, metodo, ref, nota}} → registra pago y extiende el vencimiento
 // POST {id, reset_usuario, reset_password} → restablece contraseña
-import { json, err, txt, int, num, sesion, hashPass, randomHex, validUser, slugify, hoy, sumarMeses, PERMISOS, PLANES, GRACIA_DIAS } from "../../lib/db.js";
+import { json, err, txt, int, num, sesion, hashPass, randomHex, validUser, slugify, hoy, sumarMeses, PERMISOS, PLANES, GRACIA_DIAS, ITER } from "../../lib/db.js";
 export async function onRequestGet({ request, env }) {
   const u = await sesion(request, env); if (!u?.super) return err("Solo el dueño de la plataforma", 403);
   const q = new URL(request.url).searchParams;
@@ -41,7 +41,7 @@ export async function onRequestPost({ request, env }) {
     if (b.reset_usuario) {
       if (String(b.reset_password || "").length < 8) return err("La contraseña debe tener al menos 8 caracteres");
       const salt = randomHex(16);
-      const r = await env.DB.prepare("UPDATE usuarios SET salt = ?, hash = ?, activo = 1 WHERE usuario = ? AND empresa_id = ?").bind(salt, await hashPass(String(b.reset_password), salt), txt(b.reset_usuario, 60).toLowerCase(), id).run();
+      const r = await env.DB.prepare("UPDATE usuarios SET salt = ?, hash = ?, iter = ?, activo = 1 WHERE usuario = ? AND empresa_id = ?").bind(salt, await hashPass(String(b.reset_password), salt), ITER, txt(b.reset_usuario, 60).toLowerCase(), id).run();
       if (!r.meta.changes) return err("Ese usuario no pertenece a la empresa"); return json({ ok: true });
     }
     const sets = [], vals = [];
@@ -69,7 +69,7 @@ export async function onRequestPost({ request, env }) {
   const eid = e.meta.last_row_id, salt = randomHex(16);
   await env.DB.batch([
     env.DB.prepare("INSERT INTO sucursales(empresa_id, nombre) VALUES(?, 'Principal')").bind(eid),
-    env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, permisos) VALUES(?,?,?,?,?,?)")
-      .bind(eid, au, txt(b.admin_nombre, 80) || au, await hashPass(ap, salt), salt, JSON.stringify(Object.keys(PERMISOS)))]);
+    env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, permisos, iter) VALUES(?,?,?,?,?,?,?)")
+      .bind(eid, au, txt(b.admin_nombre, 80) || au, await hashPass(ap, salt), salt, JSON.stringify(Object.keys(PERMISOS)), ITER)]);
   return json({ ok: true, id: eid, slug });
 }

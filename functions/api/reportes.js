@@ -10,7 +10,7 @@ export async function onRequestGet({ request, env }) {
     env.DB.prepare(`SELECT v.id, v.placa, v.marca, v.modelo, v.rendimiento_esp, SUM(CASE WHEN e.tipo='combustible' THEN e.monto ELSE 0 END) AS combustible,
       SUM(CASE WHEN e.tipo='mantenimiento' THEN e.monto ELSE 0 END) AS mantenimiento, SUM(CASE WHEN e.tipo='lavado' THEN e.monto ELSE 0 END) AS lavado,
       SUM(CASE WHEN e.tipo='gasto' THEN e.monto ELSE 0 END) AS gastos, SUM(e.monto) AS total, SUM(CASE WHEN e.tipo='combustible' THEN e.litros ELSE 0 END) AS litros,
-      MAX(e.km) - MIN(e.km) AS km, AVG(e.rendimiento) AS rendimiento, SUM(CASE WHEN e.alerta IS NOT NULL THEN 1 ELSE 0 END) AS alertas
+      MAX(e.km) - MIN(e.km) AS km, SUM(CASE WHEN e.rendimiento IS NOT NULL THEN e.rendimiento * e.litros END) / NULLIF(SUM(CASE WHEN e.rendimiento IS NOT NULL THEN e.litros END), 0) AS rendimiento, SUM(CASE WHEN e.alerta IS NOT NULL THEN 1 ELSE 0 END) AS alertas
       FROM eventos e JOIN vehiculos v ON v.id = e.vehiculo_id WHERE ${w} GROUP BY v.id ORDER BY total DESC`).bind(...p),
     env.DB.prepare(`SELECT e.tipo, COUNT(*) AS cantidad, SUM(e.monto) AS total FROM eventos e WHERE ${w} GROUP BY e.tipo ORDER BY total DESC`).bind(...p),
     env.DB.prepare(`SELECT substr(datetime(e.fecha, '-4 hours'), 1, 7) AS mes, SUM(e.monto) AS total, SUM(CASE WHEN e.tipo='combustible' THEN e.monto ELSE 0 END) AS combustible FROM eventos e WHERE ${w} GROUP BY mes ORDER BY mes`).bind(...p)]);
