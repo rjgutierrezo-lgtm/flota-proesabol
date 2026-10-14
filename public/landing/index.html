@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FlotaControl · Control de flota para tu empresa</title>
+<meta name="description" content="Mantenimientos a tiempo, combustible bajo control y costo por kilómetro de cada vehículo. Funciona en el celular del conductor, incluso sin señal. Planes desde Bs 99 al mes.">
+<meta name="theme-color" content="#0B2A6F"><meta name="color-scheme" content="light">
+<link rel="icon" href="/icon.svg" type="image/svg+xml"><link rel="icon" href="/favicon.png" sizes="32x32"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:type" content="website"><meta property="og:title" content="FlotaControl · Control de flota para tu empresa">
+<meta property="og:description" content="Mantenimientos a tiempo, combustible bajo control y costo por kilómetro. Funciona en el celular del conductor, incluso sin señal.">
+<meta property="og:image" content="https://flota-8r3.pages.dev/tarjeta.png"><meta property="og:url" content="https://flota-8r3.pages.dev/landing/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0B2A6F;--navy2:#061A45;--blue:#1D4ED8;--blue2:#2563EB;--sky:#A9C0FF;--orange:#FF8A00;--ink:#14213D;--muted:#5B6577;--line:#DDE2E8;--bg:#F3F5F7;--card:#fff;--ok:#1B7F4C;--ok-soft:#DDF3E6;--warn:#A15C00;--warn-soft:#FBEBD0;--bad:#B42318;--bad-soft:#FBE0DD}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5;font-size:16px}
+a{color:inherit}img{max-width:100%}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+h1,h2,h3{line-height:1.15;margin:0 0 12px}h1{font-size:clamp(2rem,5.5vw,3.4rem);font-weight:700}h2{font-size:clamp(1.5rem,3.6vw,2.2rem)}h3{font-size:1.15rem}
+p{margin:0 0 14px}.muted{color:var(--muted)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:600;border-radius:10px;padding:13px 22px;text-decoration:none;border:1px solid transparent;cursor:pointer;font-size:1rem;transition:transform .12s ease,box-shadow .12s ease}
+.btn:hover{transform:translateY(-1px)}.btn.wa{background:#25D366;color:#06301A}.btn.pri{background:var(--orange);color:#1F1300}.btn.sec{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.35)}.btn.light{background:var(--card);color:var(--ink);border-color:var(--line)}
+/* header */
+.top{position:sticky;top:0;z-index:10;background:rgba(6,26,69,.92);backdrop-filter:blur(8px);color:#fff}
+.top .wrap{display:flex;align-items:center;gap:12px;height:62px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.15rem;text-decoration:none}.brand img{width:34px;height:34px;border-radius:9px}.brand span{color:var(--sky)}
+.top nav{margin-left:auto;display:flex;gap:18px;font-weight:500;font-size:.95rem}.top nav a{text-decoration:none;opacity:.9}.top nav a:hover{opacity:1}
+.top .btn{padding:9px 14px;font-size:.92rem}
+@media (max-width:720px){.top nav{display:none}}
+/* hero */
+.hero{background:linear-gradient(160deg,#0B2A6F 0%,#061A45 60%,#04122F 100%);color:#fff;padding:64px 0 48px;overflow:hidden}
+.hero .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center}
+.hero p.lead{font-size:1.2rem;color:#C9D6FF;max-width:540px}
+.hero .ctas{display:flex;gap:12px;flex-wrap:wrap;margin:24px 0 10px}
+.hero small{color:#9FB2E6;display:block}
+.hero .kicker{display:inline-block;background:rgba(255,138,0,.15);color:#FFB357;border:1px solid rgba(255,138,0,.4);border-radius:99px;padding:4px 12px;font-weight:600;font-size:.85rem;margin-bottom:16px}
+@media (max-width:860px){.hero .wrap{grid-template-columns:1fr}.hero{padding:44px 0 36px}}
+/* phone mock */
+.phone{width:min(330px,100%);margin:0 auto;background:#0F1522;border:10px solid #1B2540;border-radius:36px;padding:14px 12px;box-shadow:0 30px 70px rgba(0,0,0,.45);color:#E7ECF4;font-size:.86rem}
+.phone .bar{display:flex;justify-content:space-between;align-items:center;font-weight:700;margin:2px 4px 12px}.phone .bar span{color:#7FA6FF;font-weight:500;font-size:.8rem}
+.phone .pc{background:#182033;border-radius:14px;padding:12px;margin-bottom:10px}
+.phone .pc h4{margin:0 0 8px;font-size:.9rem;color:#9AA6BA;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.al{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid #243049}.al:first-of-type{border-top:0}
+.al b{display:block;font-size:.9rem}.al small{color:#9AA6BA}
+.tag{font-size:.72rem;font-weight:700;padding:3px 8px;border-radius:99px;white-space:nowrap}.tag.bad{background:#3D1D1A;color:#F2887D}.tag.warn{background:#3A2C14;color:#F0B35A}.tag.ok{background:#16244A;color:#7FA6FF}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}.kpis div{background:#121A2C;border-radius:10px;padding:10px}.kpis b{display:block;font-size:1.15rem}.kpis small{color:#9AA6BA}
+.phone .go{background:var(--blue2);color:#fff;text-align:center;border-radius:10px;padding:10px;font-weight:700}
+/* sections */
+section{padding:64px 0}@media (max-width:720px){section{padding:46px 0}}
+.center{text-align:center}.sub{max-width:640px;margin:0 auto 32px;color:var(--muted);font-size:1.08rem}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+@media (max-width:860px){.grid3{grid-template-columns:1fr 1fr}}@media (max-width:600px){.grid3,.grid2{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 1px 2px rgba(20,33,61,.05),0 6px 18px rgba(20,33,61,.05)}
+.card .ic{width:44px;height:44px;border-radius:12px;background:#DFE8FF;display:flex;align-items:center;justify-content:center;font-size:1.4rem;margin-bottom:12px}
+.card p{color:var(--muted);margin:0}
+.pain{background:#fff}.pain .card{border-left:4px solid var(--orange)}.pain .card b{display:block;margin-bottom:6px;font-size:1.05rem}
+.steps{counter-reset:s}.steps .card{position:relative;padding-top:26px}.steps .card::before{counter-increment:s;content:counter(s);position:absolute;top:-16px;left:20px;width:34px;height:34px;border-radius:50%;background:var(--blue);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center}
+/* roles */
+.roles{background:linear-gradient(180deg,#fff,var(--bg))}
+.role{display:flex;gap:14px;align-items:flex-start}.role .ic{flex:none}
+/* pricing */
+.plans .card{display:flex;flex-direction:column;text-align:center;padding-top:28px}.plans .card.best{border:2px solid var(--blue);position:relative}
+.plans .card.best::before{content:"El más elegido";position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--blue);color:#fff;font-size:.78rem;font-weight:700;padding:3px 12px;border-radius:99px}
+.price{font-size:2.4rem;font-weight:700;margin:6px 0 0}.price small{font-size:1rem;color:var(--muted);font-weight:500}.per{color:var(--muted);margin-bottom:16px}
+.plans ul{list-style:none;padding:0;margin:0 0 20px;text-align:left}.plans li{padding:7px 0;border-top:1px solid var(--line);display:flex;gap:8px}.plans li::before{content:"✓";color:var(--ok);font-weight:700}
+.plans .btn{margin-top:auto}
+.note{text-align:center;color:var(--muted);margin-top:18px;font-size:.95rem}
+/* faq */
+details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px 18px;margin-bottom:10px}summary{cursor:pointer;font-weight:600;padding:12px 0}details p{color:var(--muted);padding-bottom:12px}
+/* cta */
+.cta{background:linear-gradient(160deg,#0B2A6F,#061A45);color:#fff;text-align:center}.cta p{color:#C9D6FF;font-size:1.1rem;max-width:600px;margin:0 auto 24px}
+.cta .ctas{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+footer{background:#04122F;color:#9FB2E6;padding:28px 0;font-size:.9rem}footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}footer a{color:#C9D6FF}
+.demo{background:var(--card);border:1px dashed var(--blue);border-radius:12px;padding:14px 18px;display:inline-block;text-align:left;margin-top:8px}
+.demo code{background:#DFE8FF;padding:2px 8px;border-radius:6px;font-weight:600}
+/* WhatsApp flotante */
+.fab{position:fixed;right:16px;bottom:16px;z-index:20;box-shadow:0 10px 30px rgba(0,0,0,.25);border-radius:99px}
+@media (prefers-reduced-motion:reduce){.btn,html{transition:none;scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="brand" href="#"><img src="/icon.svg" alt="">Flota<span>Control</span></a>
+  <nav><a href="#funciones">Funciones</a><a href="#como">Cómo funciona</a><a href="#planes">Planes</a><a href="#faq">Preguntas</a></nav>
+  <a class="btn sec" href="/">Ingresar</a>
+</div></header>
+
+<section class="hero"><div class="wrap">
+  <div>
+    <span class="kicker">Para flotas de 3 a 300 vehículos</span>
+    <h1>Que ningún vehículo se te pare por un mantenimiento olvidado</h1>
+    <p class="lead">FlotaControl te avisa qué mantenimiento toca, detecta cuando un vehículo gasta más combustible de lo normal y te dice cuánto cuesta cada kilómetro. Tus conductores registran desde el celular en 20 segundos, con o sin señal.</p>
+    <div class="ctas">
+      <a class="btn wa" data-wa href="#contacto">💬 Pedir una demostración</a>
+      <a class="btn sec" href="#demo">Probar la demo ahora</a>
+    </div>
+    <small>Sin instalación. Sin contrato. Funciona en cualquier celular o computadora.</small>
+  </div>
+  <div class="phone" aria-hidden="true">
+    <div class="bar">Transportes Demo <span>Hoy</span></div>
+    <div class="pc"><h4>Mantenimientos</h4>
+      <div class="al"><div><b>1986BNM · Cambio de aceite</b><small>Vencido hace 1 240 km</small></div><span class="tag bad">Vencido</span></div>
+      <div class="al"><div><b>3159PRT · SOAT</b><small>Vence en 9 días</small></div><span class="tag warn">Próximo</span></div>
+      <div class="al"><div><b>4512GHJ · Revisión de frenos</b><small>En ~12 días según su uso</small></div><span class="tag ok">Planificado</span></div>
+    </div>
+    <div class="pc"><h4>Este mes</h4><div class="kpis">
+      <div><b>Bs 18 430</b><small>Gasto total</small></div><div><b>Bs 1,46</b><small>Costo por km</small></div>
+      <div><b>9,4 km/l</b><small>Rendimiento flota</small></div><div><b>1 alerta</b><small>Consumo anormal</small></div></div></div>
+    <div class="go">📷 Registrar escaneando el QR</div>
+  </div>
+</div></section>
+
+<section class="pain"><div class="wrap">
+  <h2 class="center">¿Te suena?</h2>
+  <p class="sub center">Casi todas las empresas con vehículos llevan el control en un cuaderno, en Excel o en la cabeza del jefe de flota. Hasta que algo falla.</p>
+  <div class="grid3">
+    <div class="card"><b>El motor se fundió</b><p>Nadie se acordó del cambio de aceite. Una reparación de miles de bolivianos por un mantenimiento de 400.</p></div>
+    <div class="card"><b>"Cargó 80 litros otra vez"</b><p>Un vehículo gasta cada vez más y no sabes si es el motor, el conductor o el surtidor. Sin datos, no hay cómo reclamar.</p></div>
+    <div class="card"><b>El SOAT venció y el vehículo está en ruta</b><p>Multas, retención y un cliente esperando. Con un aviso 7 días antes esto no pasa.</p></div>
+  </div>
+</div></section>
+
+<section id="funciones"><div class="wrap">
+  <h2 class="center">Todo lo que necesitas, nada que sobre</h2>
+  <p class="sub center">Pensado para empresas de transporte, distribución, construcción y servicios de Bolivia. En español, en bolivianos, con SOAT e inspección técnica.</p>
+  <div class="grid3">
+    <div class="card"><div class="ic">🔧</div><h3>Mantenimiento preventivo</h3><p>Planes por kilómetros o por días para cada vehículo. El sistema calcula la fecha estimada según el uso real y te muestra primero lo vencido.</p></div>
+    <div class="card"><div class="ic">⛽</div><h3>Control de combustible</h3><p>Rendimiento km/l entre cargas de tanque lleno. Si un vehículo baja de lo esperado, te avisa en el momento.</p></div>
+    <div class="card"><div class="ic">📊</div><h3>Costo por kilómetro</h3><p>Combustible, mantenimiento, lavados, peajes y multas por vehículo, por parqueo y por mes. Descarga a Excel con un clic.</p></div>
+    <div class="card"><div class="ic">📄</div><h3>Documentos al día</h3><p>SOAT, inspección técnica, seguro y licencias de los conductores con aviso antes del vencimiento.</p></div>
+    <div class="card"><div class="ic">📱</div><h3>Registro desde el celular</h3><p>El conductor escanea el QR pegado en el vehículo, escribe km y litros, toma la foto de la factura y listo. Sin señal también: se envía solo después.</p></div>
+    <div class="card"><div class="ic">🛡️</div><h3>Datos confiables</h3><p>Listas cerradas de talleres y surtidores, foto obligatoria si lo decides, correcciones con historial y permisos por usuario y por parqueo.</p></div>
+  </div>
+</div></section>
+
+<section id="como" class="roles"><div class="wrap">
+  <h2 class="center">Cómo funciona</h2>
+  <p class="sub center">Empiezas a usarlo el mismo día. No hay nada que instalar en las computadoras.</p>
+  <div class="grid3 steps">
+    <div class="card"><h3>Cargas tus vehículos</h3><p>Placa, documentos y el conductor asignado. Se crean solos los planes de mantenimiento típicos, y los ajustas a tu gusto.</p></div>
+    <div class="card"><h3>Pegas un QR en cada vehículo</h3><p>Lo imprimes desde la app. El conductor lo escanea con su celular y registra combustible, lavados o gastos en segundos.</p></div>
+    <div class="card"><h3>Ves todo en el panel</h3><p>Qué mantenimiento toca, qué documento vence, cuánto gastaste y qué vehículo está consumiendo de más. Resumen diario por WhatsApp.</p></div>
+  </div>
+  <div style="height:34px"></div>
+  <div class="grid3">
+    <div class="card role"><div class="ic">🧑‍✈️</div><div><h3>Conductor</h3><p>Solo ve Registrar. Escanea, escribe, foto, guardar. Puede corregir lo suyo hasta 24 horas después.</p></div></div>
+    <div class="card role"><div class="ic">🧰</div><div><h3>Jefe de flota</h3><p>Planes de mantenimiento, vehículos, proveedores y el historial completo con anulaciones y correcciones.</p></div></div>
+    <div class="card role"><div class="ic">👔</div><div><h3>Gerencia</h3><p>Costos por vehículo y por parqueo, costo por km, alertas de consumo y descarga a Excel para contabilidad.</p></div></div>
+  </div>
+</div></section>
+
+<section id="planes"><div class="wrap">
+  <h2 class="center">Planes simples, precio en bolivianos</h2>
+  <p class="sub center">Pago mensual. Puedes cambiar de plan cuando tu flota crezca. Sin costo de instalación ni permanencia.</p>
+  <div class="grid3 plans">
+    <div class="card"><h3>Básico</h3><div class="price">Bs 99<small>/mes</small></div><div class="per">Para empezar</div>
+      <ul><li>Hasta 5 vehículos</li><li>5 usuarios</li><li>1 parqueo</li><li>Mantenimiento, combustible y costos</li><li>App para el celular con QR</li></ul>
+      <a class="btn light" data-wa data-plan="Básico" href="#contacto">Quiero este plan</a></div>
+    <div class="card best"><h3>Flota</h3><div class="price">Bs 249<small>/mes</small></div><div class="per">Para empresas en crecimiento</div>
+      <ul><li>Hasta 25 vehículos</li><li>20 usuarios</li><li>3 parqueos o bases</li><li>Todo lo del plan Básico</li><li>Permisos por parqueo</li><li>Resumen por WhatsApp</li></ul>
+      <a class="btn pri" data-wa data-plan="Flota" href="#contacto">Quiero este plan</a></div>
+    <div class="card"><h3>Empresa</h3><div class="price">Bs 499<small>/mes</small></div><div class="per">Sin límites</div>
+      <ul><li>Vehículos ilimitados</li><li>Usuarios ilimitados</li><li>Parqueos ilimitados</li><li>Todo lo del plan Flota</li><li>Acompañamiento en la puesta en marcha</li></ul>
+      <a class="btn light" data-wa data-plan="Empresa" href="#contacto">Quiero este plan</a></div>
+  </div>
+  <p class="note">Primer mes de prueba: te cargamos la flota contigo y si no te sirve, no pagas nada.</p>
+</div></section>
+
+<section id="demo" class="center" style="background:#fff"><div class="wrap">
+  <h2>Pruébalo con datos de ejemplo</h2>
+  <p class="sub">Entra a la empresa de demostración: 6 vehículos, 6 meses de registros, mantenimientos vencidos y un vehículo con consumo anormal para que veas las alertas.</p>
+  <div class="demo">Usuario <code>demo.admin</code> &nbsp; Contraseña <code>demo1234</code><br><small class="muted">Jefa de flota: ve todo. Con <code>demo.chofer</code> y la misma clave ves lo que ve un conductor.</small></div>
+  <div style="margin-top:18px"><a class="btn pri" href="/" target="_blank" rel="noopener">Abrir la demo</a></div>
+</div></section>
+
+<section id="faq"><div class="wrap" style="max-width:760px">
+  <h2 class="center">Preguntas frecuentes</h2>
+  <details><summary>¿Mis conductores necesitan un celular especial?</summary><p>No. Funciona en cualquier Android o iPhone desde el navegador, y se puede "instalar" en la pantalla de inicio como una app. No ocupa casi espacio.</p></details>
+  <details><summary>¿Qué pasa donde no hay señal?</summary><p>El registro se guarda en el teléfono y se envía solo cuando vuelve la conexión. El conductor no tiene que hacer nada.</p></details>
+  <details><summary>¿Cómo evito que registren cualquier cosa?</summary><p>Tú defines la lista de talleres, surtidores y lavaderos; el conductor solo puede elegir de ahí. Si el kilometraje baja o sube demasiado, el sistema pide confirmación y deja marcada la alerta. Las fotos de facturas quedan guardadas.</p></details>
+  <details><summary>¿Puedo tener varias bases o sucursales?</summary><p>Sí. Cada usuario puede ver solo los vehículos de su parqueo, y gerencia ve el consolidado.</p></details>
+  <details><summary>¿Dónde quedan mis datos?</summary><p>En la nube de Cloudflare, con copia de seguridad y acceso cifrado. Puedes descargar todo tu historial a Excel en cualquier momento.</p></details>
+  <details><summary>¿Ya tengo historial en Excel, lo pierdo?</summary><p>No. En la puesta en marcha cargamos tus vehículos y el último mantenimiento de cada uno para que las alertas arranquen bien desde el primer día.</p></details>
+</div></section>
+
+<section id="contacto" class="cta"><div class="wrap">
+  <h2>Hablemos de tu flota</h2>
+  <p>Escríbenos por WhatsApp y en 15 minutos te mostramos el sistema con tus propios vehículos.</p>
+  <div class="ctas"><a class="btn wa" data-wa href="#contacto">💬 Escribir por WhatsApp</a><a class="btn sec" href="/">Ya tengo cuenta: Ingresar</a></div>
+</div></section>
+
+<footer><div class="wrap"><span>© <span id="anio"></span> FlotaControl · Santa Cruz, Bolivia</span><span><a href="/">Ingresar a la app</a></span></div></footer>
+<a class="btn wa fab" data-wa href="#contacto" aria-label="Escribir por WhatsApp">💬 WhatsApp</a>
+
+<script>
+// Número de WhatsApp de ventas, con código de país y sin espacios (ej: 59170000000). Si queda vacío, los botones llevan al formulario de contacto.
+const WHATSAPP = "";
+document.getElementById("anio").textContent = new Date().getFullYear();
+document.querySelectorAll("[data-wa]").forEach(a => {
+  if (!WHATSAPP) return;
+  const plan = a.dataset.plan ? ` Me interesa el plan ${a.dataset.plan}.` : "";
+  a.href = "https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent("Hola, quiero una demostración de FlotaControl para mi empresa." + plan);
+  a.target = "_blank"; a.rel = "noopener";
+});
+</script>
+</body>
+</html>

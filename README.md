@@ -16,6 +16,8 @@ Es una aplicación web instalable (PWA) que funciona en el celular del conductor
 
 No hay paso de compilación: lo que está en `public/` se publica tal cual.
 
+La página de venta está en `public/landing/index.html` y se sirve en `/landing/`. El número de WhatsApp de ventas se pone en la constante `WHATSAPP` al final de ese archivo.
+
 ## Publicar en Cloudflare Pages
 
 1. Conecta este repositorio en Cloudflare Pages. Directorio de salida: `public`. Sin comando de build.
