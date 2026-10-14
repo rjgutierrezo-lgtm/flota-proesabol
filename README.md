@@ -43,8 +43,8 @@ Abre http://localhost:8788. La base D1 local se crea en `.wrangler/`. No subas `
 | Permiso | Qué puede hacer |
 |---|---|
 | registrar | Cargar combustible, lavados, gastos y kilometraje. Corregir sus registros hasta 24 h después |
-| mantenimiento | Planes de mantenimiento y registrar mantenimientos |
-| vehiculos | Vehículos, conductores y documentos |
+| mantenimiento | Planes de mantenimiento, registrar mantenimientos y administrar proveedores |
+| vehiculos | Vehículos, conductores, documentos y proveedores |
 | reportes | Costos, historial completo, anular y corregir cualquier registro |
 | sucursales | Parqueos o bases |
 | usuarios | Usuarios y datos de la empresa |
@@ -56,6 +56,7 @@ Un usuario puede limitarse a ciertos parqueos: solo ve y registra los vehículos
 - **Dashboard**: mantenimientos vencidos y próximos con fecha estimada según el uso real de cada vehículo, documentos por vencer, gasto por parqueo y por mes. Botón para enviar el resumen por WhatsApp.
 - **Registrar**: elige el vehículo por lista o escaneando su QR. Combustible calcula km/l entre tanques llenos y avisa si el consumo se sale de lo esperado. Funciona sin señal: el registro se guarda en el teléfono y se envía solo.
 - **Vehículos**: ficha con planes, documentos, costo por km de los últimos 30 días y etiqueta QR para imprimir.
+- **Proveedores**: lista de talleres, estaciones de servicio y lavaderos de la empresa. Al registrar, el campo es una lista con buscador: mientras la empresa tenga proveedores de ese tipo, solo se puede elegir de la lista (no se escribe cualquier cosa). Un botón importa los nombres que ya aparecen en el historial.
 - **Historial**: filtros, precio por litro, corrección y anulación de registros, descarga en CSV.
 - **Costos**: gasto por vehículo, por tipo y por mes, costo por km, descarga en CSV.
 - **Empresas** (dueño de la plataforma): planes, límites, pagos, vencimiento con días de gracia, recordatorio de pago por WhatsApp y empresa demo con 6 meses de datos.

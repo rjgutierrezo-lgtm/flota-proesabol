@@ -70,5 +70,10 @@ dialog::backdrop{background:rgba(10,15,30,.5)}.dlg{padding:18px}.dlg .acts{displ
 .inline{display:flex;gap:8px;align-items:flex-end}.inline>.field{flex:1}
 @media (prefers-reduced-motion:reduce){.scanline{animation:none}}
 
+/* ---------- Lista desplegable con buscador (proveedores) ---------- */
+.combo{position:relative}.combo input.bad{border-color:var(--bad)}
+.combo .opts{position:absolute;left:0;right:0;top:100%;z-index:20;background:var(--card);border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.22);max-height:240px;overflow:auto;margin-top:4px}
+.combo .opt{padding:9px 12px;cursor:pointer;display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line);user-select:none}.combo .opt:last-child{border-bottom:0}
+.combo .opt.act,.combo .opt:hover{background:var(--accent-soft)}.combo .opt.add{color:var(--accent);font-weight:600}.combo .opt small{color:var(--muted)}
 #dlg2{max-width:440px}
 #colaBar:empty{display:none}

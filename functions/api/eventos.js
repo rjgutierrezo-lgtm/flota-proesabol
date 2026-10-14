@@ -1,7 +1,7 @@
 // Registros de la flota: combustible, mantenimiento, lavado, gasto, kilometraje.
 // GET ?vehiculo_id=&tipo=&desde=&hasta=&pagina=&csv=1 | POST registrar | POST {id, anular:true, motivo} | POST {id, editar:true, ...campos}
 // Anular: permiso "reportes". Editar: permiso "reportes", o quien lo registró dentro de las 24 horas.
-import { json, err, txt, int, num, sesion, puede, misSucursales, guardarFoto, limpiarFotos, hoyBO, recalcularVehiculo, PERFIL_EMPRESA, E } from "../../lib/db.js";
+import { json, err, txt, int, num, sesion, puede, misSucursales, guardarFoto, limpiarFotos, hoyBO, recalcularVehiculo, resolverProveedor, PERFIL_EMPRESA, E } from "../../lib/db.js";
 const TIPOS = ["combustible", "mantenimiento", "lavado", "gasto", "kilometraje"];
 const PAGINA = 200, MAX_CSV = 5000;
 export async function onRequestGet({ request, env }) {
@@ -54,6 +54,7 @@ export async function onRequestPost({ request, env }) {
     if (!puede(u, "reportes") && !propio) return err("Solo un supervisor puede corregir registros de más de 24 horas", 403);
     const v = await env.DB.prepare("SELECT * FROM vehiculos WHERE id = ?").bind(ev.vehiculo_id).first();
     const c = validar(ev.tipo, b, v); if (c.error) return err(c.error);
+    const pr = await resolverProveedor(env, E(u), ev.tipo, b, ev.proveedor); if (pr.error) return err(pr.error); c.proveedor = pr.nombre;
     const fecha = esFecha(b.fecha) && b.fecha !== ev.fecha.slice(0, 10) ? new Date(b.fecha + "T12:00:00-04:00").toISOString() : ev.fecha;
     // se conservan las alertas que no dependen de los datos editados; el rendimiento se recalcula después
     const viejas = (ev.alerta || "").split(" · ").filter(s => s && !/^Cargó |^Rendimiento /.test(s));
@@ -69,6 +70,7 @@ export async function onRequestPost({ request, env }) {
   if (!v || !sucs.includes(v.sucursal_id)) return err("Vehículo no encontrado", 404);
   if (v.estado === "baja") return err("Ese vehículo está dado de baja");
   const c = validar(tipo, b, v); if (c.error) return err(c.error);
+  const pr = await resolverProveedor(env, E(u), tipo, b); if (pr.error) return err(pr.error); c.proveedor = pr.nombre;
   const { km, litros, monto, lleno, alertas } = c;
   if (km != null && km < v.km_actual - 1) { if (!b.confirmar_km) return err(`El kilometraje (${km}) es menor al último registrado (${v.km_actual}). Revisa el odómetro.`, 409); alertas.push(`Km menor al anterior (${v.km_actual})`); }
   if (km != null && km > v.km_actual + 3000 && v.km_actual > 0 && !b.confirmar_km) return err(`Son ${Math.round(km - v.km_actual)} km más que el último registro. ¿Es correcto? Confírmalo para guardar.`, 409);

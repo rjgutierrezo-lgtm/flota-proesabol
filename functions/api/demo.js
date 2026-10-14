@@ -8,7 +8,7 @@ export async function onRequestPost({ request, env }) {
   // 1) borrar la demo anterior
   const prev = await env.DB.prepare("SELECT id FROM empresas WHERE slug = ?").bind(SLUG).first();
   if (prev) { const id = prev.id;
-    await env.DB.batch(["eventos", "planes", "vehiculos", "conductores", "sucursales", "fotos", "pagos"].map(t => env.DB.prepare(`DELETE FROM ${t} WHERE empresa_id = ?`).bind(id))
+    await env.DB.batch(["eventos", "planes", "vehiculos", "conductores", "sucursales", "fotos", "pagos", "proveedores"].map(t => env.DB.prepare(`DELETE FROM ${t} WHERE empresa_id = ?`).bind(id))
       .concat([env.DB.prepare("DELETE FROM sesiones WHERE usuario_id IN (SELECT id FROM usuarios WHERE empresa_id = ?)").bind(id), env.DB.prepare("DELETE FROM usuarios WHERE empresa_id = ?").bind(id), env.DB.prepare("DELETE FROM empresas WHERE id = ?").bind(id)])); }
   // 2) empresa, parqueos, usuarios y conductores
   const eid = (await env.DB.prepare("INSERT INTO empresas(nombre, slug, plan, telefono_admin) VALUES('Transportes Demo', ?, 'empresa', '')").bind(SLUG).run()).meta.last_row_id;
@@ -24,6 +24,11 @@ export async function onRequestPost({ request, env }) {
   const V = [["2847KLM", p1, "Toyota", "Hilux", 2021, "Camioneta", "Diésel", 80, 10, 160, 0, mas(150), mas(90), ""], ["3159PRT", p1, "Nissan", "Frontier", 2020, "Camioneta", "Diésel", 80, 9.5, 140, 1, mas(9), mas(200), ""],
     ["4512GHJ", p1, "Hyundai", "H100", 2019, "Furgón", "Diésel", 65, 8.5, 190, 2, mas(240), mas(-20), "consumo"], ["1986BNM", p2, "Isuzu", "NPR", 2018, "Camión", "Diésel", 100, 6, 210, 3, mas(60), mas(120), "mant"],
     ["5520XYZ", p2, "Toyota", "Hiace", 2022, "Furgón", "Diésel", 70, 9, 170, 4, mas(-3), mas(300), ""], ["6034QWE", p2, "Suzuki", "Swift", 2023, "Automóvil", "Gasolina", 37, 15, 90, null, mas(320), mas(180), ""]];
+  // catálogo de proveedores (en Registrar solo se puede elegir de esta lista)
+  const PROV = [["surtidor", "YPFB Av. Banzer", "33445566"], ["surtidor", "Surtidor El Trompillo", ""], ["surtidor", "YPFB Carretera Norte", ""], ["surtidor", "Estación Los Pozos", ""],
+    ["taller", "Taller Mecánico Rojas", "70011223"], ["taller", "Servicio Toyota", "33556677"], ["taller", "Taller Hermanos Vaca", ""], ["taller", "Lubricentro Norte", ""],
+    ["lavadero", "Lavadero Express", ""], ["proveedor", "Importadora de repuestos", ""]];
+  await env.DB.batch(PROV.map(([t, n, tel]) => env.DB.prepare("INSERT INTO proveedores(empresa_id, tipo, nombre, telefono) VALUES(?,?,?,?)").bind(eid, t, n, tel)));
   const precio = c => c === "Gasolina" ? 3.74 : 3.72, rnd = (a, b) => a + Math.random() * (b - a), st = [];
   for (const [placa, sid, marca, modelo, anio, tipo, comb, tanque, rend, kmd, ci, soat, itv, prob] of V) {
     let km = Math.round(rnd(30000, 120000)); const inicio = hoyD.getTime() - 180 * dia;
