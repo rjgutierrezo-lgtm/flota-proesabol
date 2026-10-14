@@ -1,7 +1,7 @@
 // Registros de la flota: combustible, mantenimiento, lavado, gasto, kilometraje.
 // GET ?vehiculo_id=&tipo=&desde=&hasta=&pagina=&csv=1 | POST registrar | POST {id, anular:true, motivo} | POST {id, editar:true, ...campos}
 // Anular: permiso "reportes". Editar: permiso "reportes", o quien lo registró dentro de las 24 horas.
-import { json, err, txt, int, num, sesion, puede, misSucursales, guardarFoto, limpiarFotos, hoyBO, recalcularVehiculo, resolverProveedor, PERFIL_EMPRESA, E } from "../../lib/db.js";
+import { json, err, txt, int, num, sesion, puede, misSucursales, guardarFoto, limpiarFotos, hoyTZ, inicioDia, finDia, mediodia, recalcularVehiculo, resolverProveedor, PERFIL_EMPRESA, E } from "../../lib/db.js";
 const TIPOS = ["combustible", "mantenimiento", "lavado", "gasto", "kilometraje"];
 const PAGINA = 200, MAX_CSV = 5000;
 export async function onRequestGet({ request, env }) {
@@ -12,11 +12,11 @@ export async function onRequestGet({ request, env }) {
   if (TIPOS.includes(q.get("tipo"))) { w.push("e.tipo = ?"); v.push(q.get("tipo")); }
   const desde = txt(q.get("desde"), 10), hasta = txt(q.get("hasta"), 10);
   if (!puede(u, "reportes")) { w.push("e.usuario_id = ?"); v.push(u.id); }
-  if (desde) { w.push("e.fecha >= ?"); v.push(new Date(desde + "T00:00:00-04:00").toISOString()); }
-  if (hasta) { w.push("e.fecha < ?"); v.push(new Date(new Date(hasta + "T00:00:00-04:00").getTime() + 864e5).toISOString()); }
+  if (desde) { w.push("e.fecha >= ?"); v.push(inicioDia(desde, u.tz)); }
+  if (hasta) { w.push("e.fecha < ?"); v.push(finDia(hasta, u.tz)); }
   const csv = q.get("csv") === "1", limite = csv ? MAX_CSV : PAGINA, pagina = Math.max(0, int(q.get("pagina")));
-  const { results } = await env.DB.prepare(`SELECT e.*, ve.placa, c.nombre AS conductor, us.nombre AS usuario, p.nombre AS plan FROM eventos e JOIN vehiculos ve ON ve.id = e.vehiculo_id
-    LEFT JOIN conductores c ON c.id = e.conductor_id LEFT JOIN usuarios us ON us.id = e.usuario_id LEFT JOIN planes p ON p.id = e.plan_id WHERE ${w.join(" AND ")} ORDER BY e.fecha DESC, e.id DESC LIMIT ? OFFSET ?`)
+  const { results } = await env.DB.prepare(`SELECT e.*, ve.placa, s.nombre AS sucursal, c.nombre AS conductor, us.nombre AS usuario, p.nombre AS plan FROM eventos e JOIN vehiculos ve ON ve.id = e.vehiculo_id
+    JOIN sucursales s ON s.id = e.sucursal_id LEFT JOIN conductores c ON c.id = e.conductor_id LEFT JOIN usuarios us ON us.id = e.usuario_id LEFT JOIN planes p ON p.id = e.plan_id WHERE ${w.join(" AND ")} ORDER BY e.fecha DESC, e.id DESC LIMIT ? OFFSET ?`)
     .bind(...v, limite + 1, csv ? 0 : pagina * PAGINA).all();
   const mas = results.length > limite; if (mas) results.pop();
   return json({ ok: true, eventos: results, mas, pagina });
@@ -31,7 +31,7 @@ function validar(tipo, b, v) {
   const alertas = [];
   if (tipo === "combustible" && v.tanque_l > 0 && litros > v.tanque_l * 1.05) alertas.push(`Cargó ${litros} L y el tanque es de ${v.tanque_l} L`);
   const lleno = tipo === "combustible" ? (b.lleno === false ? 0 : 1) : 0;
-  return { km, litros, monto, lleno, alertas, proveedor: txt(b.proveedor, 80), detalle: txt(b.detalle, 300), categoria: txt(b.categoria, 40) };
+  return { km, litros, monto, lleno, alertas, proveedor: txt(b.proveedor, 80), detalle: txt(b.detalle, 300), categoria: txt(b.categoria, 40), factura: txt(b.factura, 40) };
 }
 export async function onRequestPost({ request, env }) {
   const u = await sesion(request, env); if (!u || u.super) return err("Inicia sesión", 401);
@@ -55,11 +55,14 @@ export async function onRequestPost({ request, env }) {
     const v = await env.DB.prepare("SELECT * FROM vehiculos WHERE id = ?").bind(ev.vehiculo_id).first();
     const c = validar(ev.tipo, b, v); if (c.error) return err(c.error);
     const pr = await resolverProveedor(env, E(u), ev.tipo, b, ev.proveedor); if (pr.error) return err(pr.error); c.proveedor = pr.nombre;
-    const fecha = esFecha(b.fecha) && b.fecha !== ev.fecha.slice(0, 10) ? new Date(b.fecha + "T12:00:00-04:00").toISOString() : ev.fecha;
+    const fechaLocal = new Date(new Date(ev.fecha).getTime() + (u.tz ?? -4) * 3600e3).toISOString().slice(0, 10);
+    const fecha = esFecha(b.fecha) && b.fecha !== fechaLocal ? mediodia(b.fecha, u.tz) : ev.fecha;
+    let cid = ev.conductor_id; // conductor del registro (quién manejaba)
+    if (b.conductor_id !== undefined) { const x = int(b.conductor_id) || null; cid = x && !(await env.DB.prepare("SELECT 1 FROM conductores WHERE id = ? AND empresa_id = ?").bind(x, E(u)).first()) ? ev.conductor_id : x; }
     // se conservan las alertas que no dependen de los datos editados; el rendimiento se recalcula después
     const viejas = (ev.alerta || "").split(" · ").filter(s => s && !/^Cargó |^Rendimiento /.test(s));
-    await env.DB.prepare(`UPDATE eventos SET km=?, litros=?, monto=?, lleno=?, proveedor=?, detalle=?, categoria=?, fecha=?, alerta=? WHERE id=?`)
-      .bind(c.km, c.litros, c.monto, c.lleno, c.proveedor, c.detalle, c.categoria, fecha, [...viejas, ...c.alertas].join(" · ") || null, ev.id).run();
+    await env.DB.prepare(`UPDATE eventos SET km=?, litros=?, monto=?, lleno=?, proveedor=?, detalle=?, categoria=?, fecha=?, alerta=?, factura=?, conductor_id=? WHERE id=?`)
+      .bind(c.km, c.litros, c.monto, c.lleno, c.proveedor, c.detalle, c.categoria, fecha, [...viejas, ...c.alertas].join(" · ") || null, c.factura, cid, ev.id).run();
     await recalcularVehiculo(env, ev.vehiculo_id);
     return json({ ok: true });
   }
@@ -69,7 +72,10 @@ export async function onRequestPost({ request, env }) {
   const v = await env.DB.prepare("SELECT * FROM vehiculos WHERE id = ? AND empresa_id = ?").bind(int(b.vehiculo_id), E(u)).first();
   if (!v || !sucs.includes(v.sucursal_id)) return err("Vehículo no encontrado", 404);
   if (v.estado === "baja") return err("Ese vehículo está dado de baja");
+  if (u.foto_obligatoria && ["combustible", "mantenimiento"].includes(tipo) && !b.foto1) return err("Tu empresa exige la foto de la factura en este registro. Tómala o elige el archivo antes de guardar.");
   const c = validar(tipo, b, v); if (c.error) return err(c.error);
+  let cid = v.conductor_id; // quién manejaba: por defecto el conductor asignado al vehículo
+  if (b.conductor_id !== undefined && b.conductor_id !== null) { const x = int(b.conductor_id) || null; cid = !x ? null : (await env.DB.prepare("SELECT 1 FROM conductores WHERE id = ? AND empresa_id = ?").bind(x, E(u)).first()) ? x : v.conductor_id; }
   const pr = await resolverProveedor(env, E(u), tipo, b); if (pr.error) return err(pr.error); c.proveedor = pr.nombre;
   const { km, litros, monto, lleno, alertas } = c;
   if (km != null && km < v.km_actual - 1) { if (!b.confirmar_km) return err(`El kilometraje (${km}) es menor al último registrado (${v.km_actual}). Revisa el odómetro.`, 409); alertas.push(`Km menor al anterior (${v.km_actual})`); }
@@ -85,10 +91,10 @@ export async function onRequestPost({ request, env }) {
   }
   let plan = null; if (tipo === "mantenimiento" && b.plan_id) { plan = await env.DB.prepare("SELECT * FROM planes WHERE id = ? AND vehiculo_id = ? AND activo = 1").bind(int(b.plan_id), v.id).first(); if (!plan) return err("Plan de mantenimiento no válido"); }
   let f1 = null, f2 = null; try { if (b.foto1) f1 = await guardarFoto(env, E(u), b.foto1); if (b.foto2) f2 = await guardarFoto(env, E(u), b.foto2); } catch (e) { return err(e.message); }
-  const fecha = esFecha(b.fecha) && b.fecha !== hoyBO() ? new Date(b.fecha + "T12:00:00-04:00").toISOString() : new Date().toISOString();
-  const st = [env.DB.prepare(`INSERT INTO eventos(empresa_id, sucursal_id, vehiculo_id, tipo, fecha, km, litros, monto, lleno, proveedor, detalle, categoria, plan_id, foto1, foto2, conductor_id, usuario_id, rendimiento, alerta, plan_km_antes, plan_fecha_antes)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(E(u), v.sucursal_id, v.id, tipo, fecha, km, litros, monto, lleno, c.proveedor, c.detalle, c.categoria, plan?.id ?? null, f1, f2, v.conductor_id, u.id, rendimiento, alertas.join(" · ") || null,
-      plan ? plan.ultimo_km : null, plan ? plan.ultima_fecha : null)];
+  const fecha = esFecha(b.fecha) && b.fecha !== hoyTZ(u.tz) ? mediodia(b.fecha, u.tz) : new Date().toISOString();
+  const st = [env.DB.prepare(`INSERT INTO eventos(empresa_id, sucursal_id, vehiculo_id, tipo, fecha, km, litros, monto, lleno, proveedor, detalle, categoria, plan_id, foto1, foto2, conductor_id, usuario_id, rendimiento, alerta, plan_km_antes, plan_fecha_antes, factura)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(E(u), v.sucursal_id, v.id, tipo, fecha, km, litros, monto, lleno, c.proveedor, c.detalle, c.categoria, plan?.id ?? null, f1, f2, cid, u.id, rendimiento, alertas.join(" · ") || null,
+      plan ? plan.ultimo_km : null, plan ? plan.ultima_fecha : null, c.factura)];
   if (km != null && km > v.km_actual) st.push(env.DB.prepare("UPDATE vehiculos SET km_actual = ? WHERE id = ?").bind(km, v.id));
   if (plan) st.push(env.DB.prepare("UPDATE planes SET ultimo_km = ?, ultima_fecha = ? WHERE id = ?").bind(km ?? v.km_actual, fecha.slice(0, 10), plan.id));
   const r = await env.DB.batch(st);

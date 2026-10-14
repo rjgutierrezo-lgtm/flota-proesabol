@@ -33,10 +33,11 @@ const sucName=id=>(ALLSUCS.find(s=>s.id===id)||SUCS.find(s=>s.id===id)||{}).nomb
 const val=(b,s)=>b.querySelector(s)?.value??"";
 
 // ===================== Inicio, instalación y login =====================
-function show(v){ ["vSetup","vLogin","vApp"].forEach(x=>$(x).classList.toggle("hidden",x!==v)); }
+function show(v){ ["vSetup","vLogin","vApp","vPub"].forEach(x=>$(x).classList.toggle("hidden",x!==v)); }
 async function boot(){
   if(TOKEN){ try{ const u=(await api("login")).usuario; ls.set("ag-user",JSON.stringify(u)); setUser(u); return startApp(); }
     catch(e){ const c=ls.get("ag-user"); if(e.offline&&c){ OFFLINE=true; setUser(JSON.parse(c)); return startApp(); } } }
+  const hv=location.hash.match(/^#v=([a-f0-9]+)/i); if(hv) return fichaPublica(hv[1]); // QR escaneado sin sesión: ficha pública del vehículo
   try{ const s=await api("setup"); if(s.necesita) return show("vSetup"); }catch(e){}
   show("vLogin"); $("lgUser").focus();
 }
@@ -62,6 +63,7 @@ const VIEWS=[
   {id:"reportes",t:"Costos",ok:()=>can("reportes"),f:viewReportes},
   {id:"conductores",t:"Conductores",ok:()=>can("vehiculos"),f:viewConductores},
   {id:"proveedores",t:"Proveedores",ok:()=>can("mantenimiento")||can("vehiculos"),f:viewProveedores},
+  {id:"repuestos",t:"Repuestos",ok:()=>can("mantenimiento"),f:viewRepuestos},
   {id:"sucursales",t:"Parqueos",ok:()=>can("sucursales"),f:viewSucursales},
   {id:"usuarios",t:"Usuarios",ok:()=>can("usuarios"),f:viewUsuarios},
   {id:"config",t:"Empresa",ok:()=>can("usuarios"),f:viewConfig}];
@@ -175,9 +177,10 @@ async function viewSucursales(){ ALLSUCS=(await api("m/sucursales")).items;
     <p class="muted">Cada vehículo pertenece a un parqueo (base, sucursal o garaje). En Usuarios eliges a qué parqueos accede cada uno: un conductor asignado a un parqueo solo ve los vehículos de ese parqueo.</p>`;
   const form=s=>dialog(`<h3>${s?"Editar":"Nuevo"} parqueo</h3><div class="field"><label>Nombre *</label><input id="sn" value="${esc(s?.nombre||"")}"></div>
     <div class="row"><div class="field"><label>Dirección</label><input id="sa" value="${esc(s?.direccion||"")}"></div><div class="field"><label>Teléfono</label><input id="st" value="${esc(s?.telefono||"")}"></div></div>
+    <div class="field"><label>Presupuesto mensual del parqueo (${esc(EMP.moneda)}, vacío = sin límite)</label><input id="sp" inputmode="decimal" value="${s?.presupuesto_mes||""}"></div>
     ${s?`<label class="check"><input type="checkbox" id="sac" ${s.activo?"checked":""}> Activa</label>`:""}<div class="err" id="serr"></div><div class="acts"><button class="sec" id="sx">Cancelar</button><button id="sok">Guardar</button></div>`, b=>{
     b.querySelector("#sx").onclick=closeDlg;
-    b.querySelector("#sok").onclick=async()=>{ try{ await api("m/sucursales",{body:{id:s?.id,nombre:val(b,"#sn"),direccion:val(b,"#sa"),telefono:val(b,"#st"),activo:s?b.querySelector("#sac").checked:true}});
+    b.querySelector("#sok").onclick=async()=>{ try{ await api("m/sucursales",{body:{id:s?.id,nombre:val(b,"#sn"),direccion:val(b,"#sa"),telefono:val(b,"#st"),presupuesto_mes:val(b,"#sp").replace(",","."),activo:s?b.querySelector("#sac").checked:true}});
       closeDlg(); toast("Parqueo guardado"); const me=await api("login"); setUser(me.usuario); drawSucSel(); go("sucursales"); }catch(e){ b.querySelector("#serr").textContent=e.message; } }; });
   $("snew").onclick=()=>form(null); document.querySelectorAll("#main tr[data-id]").forEach(tr=>tr.onclick=()=>form(ALLSUCS.find(s=>s.id==tr.dataset.id))); }
 
@@ -291,7 +294,10 @@ const fmtKm=n=>`${fmtQ(Math.round(n||0))} km`;
 const fechaCorta=f=>f?new Date(f+"T12:00:00Z").toLocaleDateString("es-BO",{day:"2-digit",month:"short",year:"numeric",timeZone:"UTC"}):"—";
 async function cargarVeh(){ try{ VEH=(await api("vehiculos")).vehiculos; ls.set("ag-veh-"+USER.id,JSON.stringify(VEH)); }
   catch(e){ if(!e.offline) throw e; VEH=JSON.parse(ls.get("ag-veh-"+USER.id)||"null"); if(!VEH) throw e; toast("Sin conexión: se muestra la última lista de vehículos guardada"); } return VEH; }
-async function cargarCond(){ COND=(await api("conductores")).conductores; return COND; }
+async function cargarCond(){ try{ COND=(await api("conductores")).conductores; ls.set("ag-cond-"+USER.id,JSON.stringify(COND)); }
+  catch(e){ if(!e.offline) throw e; COND=JSON.parse(ls.get("ag-cond-"+USER.id)||"[]"); } return COND; }
+const DOC1=()=>EMP?.doc1||"SOAT", DOC2=()=>EMP?.doc2||"Inspección técnica";
+const selCond=(id,sel,vacio="Sin conductor")=>`<select id="${id}"><option value="">${vacio}</option>${COND.filter(c=>c.activo||c.id===sel).map(c=>`<option value="${c.id}" ${c.id===sel?"selected":""}>${esc(c.nombre)}</option>`).join("")}</select>`;
 async function cargarProv(){ try{ PROV=(await api("proveedores")).proveedores; ls.set("ag-prov-"+USER.id,JSON.stringify(PROV)); }
   catch(e){ if(!e.offline) throw e; PROV=JSON.parse(ls.get("ag-prov-"+USER.id)||"[]"); } return PROV; }
 // Proveedores: qué tipo usa cada registro y sus nombres en pantalla [singular, plural, "el/la ..."]
@@ -350,12 +356,15 @@ async function viewPanel(){ const admin=can("reportes"); let par=PRESEL?.panel_s
     const tablaRea=`<div class="card tbl"><h3>🔧 Mantenimientos realizados <small class="muted">(${admin?`${fechaCorta(j.desde)} – ${fechaCorta(j.hasta)}`:"últimos 30 días"})</small></h3><table><thead><tr><th>Fecha</th><th>Vehículo</th><th>Trabajo</th><th>Taller</th><th class="n">Km</th>${j.costos?'<th class="n">Costo</th>':""}</tr></thead><tbody>
       ${j.realizados.map(x=>`<tr><td>${fechaHora(x.fecha).split(",")[0]}</td><td><b>${esc(x.placa)}</b></td><td>${esc(x.plan||x.detalle||"Correctivo")}</td><td>${esc(x.proveedor||"")}</td><td class="n">${x.km!=null?fmtQ(Math.round(x.km)):""}</td>${j.costos?`<td class="n">${money(x.monto)}</td>`:""}</tr>`).join("")||'<tr><td colspan="6" class="muted">Sin mantenimientos en este período.</td></tr>'}</tbody></table></div>`;
     const docs=j.documentos.length?`<div class="card" style="margin-top:12px"><h3>📄 Documentos vencidos o por vencer</h3>${j.documentos.map(x=>`<div><span class="chip ${x.estado==="vencido"?"bad":"warn"}">${x.estado==="vencido"?"Vencido":`${x.dias} días`}</span> <b>${esc(x.placa)}</b> · ${esc(x.doc)} · ${fechaCorta(x.fecha)}</div>`).join("")}</div>`:"";
+    const barPres=x=>{ const p=x.gastado/x.presupuesto*100, col=p>=100?"var(--bad)":p>=80?"var(--warn)":"var(--accent)"; return `<div style="margin:6px 0"><div style="display:flex;justify-content:space-between;gap:8px;font-size:.9rem"><span><b>${esc(x.placa||x.nombre)}</b>${x.placa&&SUCS.length>1?` <small class="muted">${esc(x.sucursal)}</small>`:x.placa?"":' <small class="muted">parqueo</small>'}</span><span class="num">${money(x.gastado)} / ${money(x.presupuesto)} · <b style="color:${col}">${Math.round(p)}%</b></span></div><div style="background:var(--bg);border-radius:6px;height:10px;overflow:hidden"><div style="height:100%;width:${Math.min(100,p)}%;background:${col}"></div></div></div>`; };
+    const PR=j.presupuestos||{parqueos:[],vehiculos:[]}, presCard=(PR.parqueos.length||PR.vehiculos.length)?`<div class="card" style="margin-top:12px"><h3>💸 Presupuesto de ${esc(j.mes)} <small class="muted">(gastado / presupuesto)</small></h3>${PR.parqueos.map(barPres).join("")}${PR.vehiculos.map(barPres).join("")}</div>`:"";
+    const repCard=j.repuestos_min?.length?`<div class="card" style="margin-top:12px"><h3>📦 Repuestos bajo mínimo</h3>${j.repuestos_min.map(r=>`<div><span class="chip ${r.stock<=0?"bad":"warn"}">${fmtQ(r.stock)} ${esc(r.unidad)}</span> <b>${esc(r.nombre)}</b> <small class="muted">mínimo ${fmtQ(r.minimo)}</small></div>`).join("")}${can("mantenimiento")?`<button class="sec" id="prep" style="margin-top:8px">Ver repuestos</button>`:""}</div>`:"";
     if(admin){
       const meses=[...new Set(j.meses.map(m=>m.mes))].map(m=>({mes:m,total:j.meses.filter(x=>x.mes===m).reduce((a,x)=>a+x.total,0)}));
       $("dout").innerHTML=`<div class="kpis"><div class="card kpi"><div class="v">${j.vehiculos.length}</div><div class="l">Vehículos${SUCS.length>1&&!$("dp")?.value?` en ${j.parqueos.length} parqueos`:""}</div></div>
         <div class="card kpi"><div class="v" style="color:${venc?"var(--bad)":"inherit"}">${venc}</div><div class="l">Mantenimientos vencidos</div></div><div class="card kpi"><div class="v" style="color:${prox?"var(--warn)":"inherit"}">${prox}</div><div class="l">Próximos</div></div>
         <div class="card kpi"><div class="v">${j.realizados.length}</div><div class="l">Realizados en el período</div></div><div class="card kpi"><div class="v num">${money(T.total)}</div><div class="l">Gasto del período (mant. ${money(T.man)})</div></div></div>
-        ${tablaPlan}<div style="margin-top:12px">${tablaRea}</div>${docs}
+        ${tablaPlan}<div style="margin-top:12px">${tablaRea}</div>${docs}${presCard}${repCard}
         <div class="row" style="align-items:flex-start;margin-top:12px">${j.parqueos.length>1?`<div class="card tbl"><h3>Por parqueo</h3><table><thead><tr><th>Parqueo</th><th class="n">Vehículos</th><th class="n">Vencidos</th><th class="n">Próximos</th><th class="n">Combustible</th><th class="n">Mantenim.</th><th class="n">Total</th></tr></thead><tbody>
           ${j.parqueos.map(x=>`<tr class="click" data-ps="${x.sucursal_id}"><td><b>${esc(x.nombre)}</b></td><td class="n">${x.vehiculos}</td><td class="n" style="color:${x.vencidos?"var(--bad)":"inherit"}">${x.vencidos}</td><td class="n">${x.proximos}</td><td class="n">${money(x.combustible)}</td><td class="n">${money(x.mantenimiento)}</td><td class="n"><b>${money(x.total)}</b></td></tr>`).join("")}</tbody></table></div>`:""}
           <div class="card"><h3>Gasto por mes</h3>${barras(meses,"total","mes")}</div>${j.parqueos.length>1?"":`<div class="card"><h3>Gasto del período por tipo</h3>${barras([{t:"⛽ Combustible",v:T.comb},{t:"🔧 Mantenim.",v:T.man},{t:"🧽 Lavados",v:j.parqueos.reduce((a,x)=>a+(x.lavado||0),0)},{t:"🧾 Otros",v:j.parqueos.reduce((a,x)=>a+(x.gasto||0),0)}],"v","t")}</div>`}</div>`;
@@ -363,8 +372,9 @@ async function viewPanel(){ const admin=can("reportes"); let par=PRESEL?.panel_s
       $("dout").innerHTML=`<div class="pgrid" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr));margin-bottom:12px">${j.vehiculos.map(v=>{ const ps=j.planificados.filter(x=>x.vehiculo_id===v.id&&x.estado!=="ok"&&x.estado!=="sin_registro");
         return `<div class="card" style="padding:12px"><b style="font-size:1.2rem">${esc(v.placa)}</b> <span class="chip ${ps.some(x=>x.estado==="vencido")?"bad":ps.length?"warn":"ok"}">${ps.some(x=>x.estado==="vencido")?"Mantenimiento vencido":ps.length?"Mantenimiento próximo":"Al día"}</span>
           <div class="muted">${esc([v.marca,v.modelo].filter(Boolean).join(" "))}${SUCS.length>1?" · "+esc(v.sucursal):""}</div><div>${fmtKm(v.km_actual)}</div>${can("registrar")?`<button class="sec" data-rv="${v.id}" style="margin-top:8px">➕ Registrar</button>`:""}</div>`; }).join("")||'<p class="muted">No hay vehículos en tus parqueos.</p>'}</div>
-        ${tablaPlan}<div style="margin-top:12px">${tablaRea}</div>${docs}`;
+        ${tablaPlan}<div style="margin-top:12px">${tablaRea}</div>${docs}${repCard}`;
     }
+    const prep=$("prep"); if(prep) prep.onclick=()=>go("repuestos");
     $("dout").querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{ const [vi,pi]=b.dataset.r.split(":").map(Number); PRESEL={vehiculo_id:vi,tipo:"mantenimiento",plan_id:pi}; go("registrar"); });
     $("dout").querySelectorAll("[data-rv]").forEach(b=>b.onclick=()=>{ PRESEL={vehiculo_id:+b.dataset.rv}; go("registrar"); });
     $("dout").querySelectorAll("[data-ps]").forEach(tr=>tr.onclick=()=>{ if($("dp")){ $("dp").value=tr.dataset.ps; load(); } });
@@ -384,7 +394,7 @@ function escanearVeh(){ scan({titulo:"Escanear QR del vehículo",onCode:c=>{ con
 // ===================== Registrar =====================
 async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.estado!=="baja");
   const pre=PRESEL||{}; PRESEL=null; let tipo=pre.tipo||"combustible", vid=pre.vehiculo_id||(act.length===1?act[0].id:null), f1=null, f2=null, CB=null;
-  await cargarProv();
+  await cargarProv(); await cargarCond();
   const tipos=Object.keys(TIPOS_EV).filter(t=>t==="mantenimiento"?can("mantenimiento"):can("registrar"));
   if(!tipos.includes(tipo)) tipo=tipos[0];
   if(!act.length){ $("main").innerHTML='<div class="card"><p class="muted">No hay vehículos activos.</p></div>'; return; }
@@ -399,18 +409,19 @@ async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.est
     const km=`<div class="field"><label>Kilometraje (odómetro)${["combustible","kilometraje"].includes(tipo)?" *":""}</label><input id="fk" inputmode="numeric" placeholder="${v?Math.round(v.km_actual):""}"></div>`;
     const fecha=`<div class="field"><label>Fecha</label><input type="date" id="ff" value="${today()}" max="${today()}"></div>`;
     const tp=TIPO_PROV[tipo], prov=(l,ph)=>comboHTML("fp",l,provDe(tp).length,ph), det=`<div class="field"><label>Detalle</label><input id="fd"></div>`;
+    const fac=`<div class="field"><label>N° de factura</label><input id="ffa" placeholder="Opcional"></div>`, cond=`<div class="field"><label>Conductor (quién manejaba)</label>${selCond("fco",v?.conductor_id||null)}</div>`;
     const mon=r=>`<div class="field"><label>Monto (${esc(EMP.moneda)})${r?" *":""}</label><input id="fm" inputmode="decimal"></div>`;
     const planes=v?v.planes:[];
     $("rform").innerHTML=({
       combustible:`<div class="row">${km}<div class="field"><label>Litros *</label><input id="fl" inputmode="decimal"></div>${mon(1)}</div>
         <label class="check"><input type="checkbox" id="fll" checked> Tanque lleno (necesario para calcular el rendimiento km/l)</label>
-        <div class="row" style="margin-top:8px">${prov("Estación de servicio","Ej: YPFB Av. Banzer")}${fecha}</div>${fotoCampo("f1","Foto del surtidor o la factura")}${fotoCampo("f2","Foto del odómetro")}`,
+        <div class="row" style="margin-top:8px">${prov("Estación de servicio","Ej: YPFB Av. Banzer")}${fecha}</div><div class="row">${fac}${cond}</div>${fotoCampo("f1","Foto del surtidor o la factura"+(EMP.foto_obligatoria?" *":""))}${fotoCampo("f2","Foto del odómetro")}`,
       mantenimiento:`<div class="field"><label>Mantenimiento</label><select id="fpl"><option value="">Otro (correctivo o no programado)</option>${planes.map(p=>`<option value="${p.id}" ${pre.plan_id===p.id?"selected":""}>${esc(p.nombre)}${p.estado==="vencido"?" (vencido)":p.estado==="proximo"?" (próximo)":""}</option>`).join("")}</select></div>
-        <div class="row">${km}${mon(0)}${fecha}</div><div class="row">${prov("Taller","Ej: Taller Mecánico Rojas")}${det}</div>${fotoCampo("f1","Foto de la factura o el trabajo")}`,
-      lavado:`<div class="row">${mon(1)}${km}${fecha}</div><div class="row">${prov("Lavadero","")}<div class="field"><label>Tipo de lavado</label><select id="fd"><option>Lavado simple</option><option>Lavado completo</option><option>Lavado de motor</option><option>Aspirado</option></select></div></div>${fotoCampo("f1","Foto (opcional)")}`,
+        <div class="row">${km}${mon(0)}${fecha}</div><div class="row">${prov("Taller","Ej: Taller Mecánico Rojas")}${det}</div><div class="row">${fac}${cond}</div>${fotoCampo("f1","Foto de la factura o el trabajo"+(EMP.foto_obligatoria?" *":""))}`,
+      lavado:`<div class="row">${mon(1)}${km}${fecha}</div><div class="row">${prov("Lavadero","")}<div class="field"><label>Tipo de lavado</label><select id="fd"><option>Lavado simple</option><option>Lavado completo</option><option>Lavado de motor</option><option>Aspirado</option></select></div></div><div class="row">${fac}${cond}</div>${fotoCampo("f1","Foto (opcional)")}`,
       gasto:`<div class="row"><div class="field"><label>Tipo de gasto</label><select id="fc"><option>Peaje</option><option>Repuesto</option><option>Llantas</option><option>Multa</option><option>Seguro / SOAT</option><option>Parqueo</option><option>Otro</option></select></div>${mon(1)}${fecha}</div>
-        <div class="row">${km}${prov("Proveedor","")}</div>${det}${fotoCampo("f1","Foto del comprobante")}`,
-      kilometraje:`<div class="row">${km}${fecha}</div>${det}${fotoCampo("f1","Foto del odómetro (opcional)")}`})[tipo];
+        <div class="row">${km}${prov("Proveedor","")}</div><div class="row">${fac}${cond}</div>${det}${fotoCampo("f1","Foto del comprobante")}`,
+      kilometraje:`<div class="row">${km}${fecha}${cond}</div>${det}${fotoCampo("f1","Foto del odómetro (opcional)")}`})[tipo];
     CB=$("fp")?combo($("rform"),"fp",provDe(tp),{etiq:ETIQ_PROV[tp][2],plural:ETIQ_PROV[tp][1],nuevo:puedeProv()?n=>nuevoProv(tp,n):null}):null;
     f1=f2=null; if($("f1")) enlazarFoto($("rform"),"f1",d=>f1=d); if($("f2")) enlazarFoto($("rform"),"f2",d=>f2=d); };
   $("rv").onchange=form; $("rtip").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{ tipo=b.dataset.t; form(); });
@@ -418,7 +429,8 @@ async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.est
   form();
   const guardar=async confirmar=>{ $("re").textContent=""; if(!$("rv").value) return $("re").textContent="Elige el vehículo";
     const g=id=>$(id)?$(id).value.replace(",","."):""; const pv=CB?CB.get():{proveedor:""}; if(pv.error) return $("re").textContent=pv.error;
-    const body={tipo,vehiculo_id:+$("rv").value,km:g("fk"),litros:g("fl"),monto:g("fm"),lleno:$("fll")?$("fll").checked:true,proveedor:pv.proveedor,proveedor_id:pv.proveedor_id||null,detalle:$("fd")?.value||"",categoria:$("fc")?.value||"",plan_id:$("fpl")?.value||null,fecha:$("ff")?.value||"",foto1:f1,foto2:f2,confirmar_km:confirmar};
+    if(EMP.foto_obligatoria&&["combustible","mantenimiento"].includes(tipo)&&!f1) return $("re").textContent="Tu empresa exige la foto de la factura en este registro. Tómala o elige el archivo antes de guardar.";
+    const body={tipo,vehiculo_id:+$("rv").value,km:g("fk"),litros:g("fl"),monto:g("fm"),lleno:$("fll")?$("fll").checked:true,proveedor:pv.proveedor,proveedor_id:pv.proveedor_id||null,factura:$("ffa")?.value||"",conductor_id:$("fco")?$("fco").value:undefined,detalle:$("fd")?.value||"",categoria:$("fc")?.value||"",plan_id:$("fpl")?.value||null,fecha:$("ff")?.value||"",foto1:f1,foto2:f2,confirmar_km:confirmar};
     $("rok").disabled=true;
     try{ const r=await api("eventos",{body}); beepScan();
       toast(r.rendimiento?`Guardado · Rendimiento ${fmtN(r.rendimiento)} km/l`:"Guardado"); if(r.alertas?.length) await avisar(r.alertas.join("\n"),"⚠️ Atención"); PRESEL={vehiculo_id:body.vehiculo_id,tipo}; go("registrar"); }
@@ -443,16 +455,17 @@ async function viewVehiculos(){ await cargarVeh(); const P=USER.plan||{};
 function vehiculoDetalle(id){ const v=VEH.find(x=>x.id===id); if(!v) return;
   const doc=(n,f,d)=>`<tr><td>${n}</td><td>${fechaCorta(f)}</td><td>${d?`<span class="chip ${d.estado==="ok"?"ok":d.estado==="proximo"?"warn":"bad"}">${d.estado==="vencido"?"Vencido":d.estado==="proximo"?`${d.dias} días`:"Vigente"}</span>`:'<span class="muted">Sin fecha</span>'}</td></tr>`;
   dialog(`<div style="display:flex;gap:12px;align-items:center">${v.foto?`<img data-k="${esc(v.foto)}" alt="" style="width:90px;height:68px;object-fit:cover;border-radius:8px">`:""}<div><h3 style="margin:0">${esc(v.placa)}</h3>
-    <div class="muted">${esc([v.marca,v.modelo,v.anio,v.tipo].filter(Boolean).join(" · "))} · ${esc(v.combustible)}</div><div>${fmtKm(v.km_actual)}${v.conductor?` · 👤 ${esc(v.conductor)}`:""}</div><small class="muted">Últimos 30 días: ${money(v.gasto_30d)} · ${fmtKm(v.km_30d)}${v.costo_km_30d?` · ${money(v.costo_km_30d)} por km`:""}${v.precio_litro_ult?` · última carga ${money(v.precio_litro_ult)}/L`:""}</small></div></div>
+    <div class="muted">${esc([v.marca,v.modelo,v.anio,v.tipo].filter(Boolean).join(" · "))} · ${esc(v.combustible)}</div><div>${fmtKm(v.km_actual)}${v.conductor?` · 👤 ${esc(v.conductor)}`:""}</div><small class="muted">Últimos 30 días: ${money(v.gasto_30d)} · ${fmtKm(v.km_30d)}${v.costo_km_30d?` · ${money(v.costo_km_30d)} por km`:""}${v.precio_litro_ult?` · última carga ${money(v.precio_litro_ult)}/L`:""}${v.presupuesto_mes?` · presupuesto ${money(v.presupuesto_mes)}/mes`:""}</small></div></div>
     ${v.alertas.length?`<div style="margin-top:10px">${v.alertas.map(a=>`<div><span class="chip ${a.nivel}">${a.nivel==="bad"?"Vencido":"Atención"}</span> ${esc(a.texto)}</div>`).join("")}</div>`:""}
     <h3 style="margin-top:14px">Mantenimiento preventivo</h3><div class="tbl"><table><thead><tr><th>Plan</th><th>Cada</th><th>Último</th><th>Próximo</th><th></th></tr></thead><tbody>
     ${v.planes.map(p=>`<tr><td>${esc(p.nombre)}</td><td><small>${p.cada_km?fmtKm(p.cada_km):""}${p.cada_km&&p.cada_dias?" o ":""}${p.cada_dias?p.cada_dias+" días":""}</small></td><td><small>${p.ultima_fecha?fechaCorta(p.ultima_fecha):"—"}${p.ultimo_km?"<br>"+fmtKm(p.ultimo_km):""}</small></td>
       <td><span class="chip ${p.estado==="vencido"?"bad":p.estado==="proximo"?"warn":"ok"}">${p.proxKm!=null?fmtKm(p.proxKm):""}${p.proxKm!=null&&p.proxFecha?" / ":""}${p.proxFecha?fechaCorta(p.proxFecha):""}</span></td>
       <td>${can("mantenimiento")?`<button class="link" data-pe="${p.id}">Editar</button>`:""}</td></tr>`).join("")||'<tr><td colspan="5" class="muted">Sin planes.</td></tr>'}</tbody></table></div>
     ${can("mantenimiento")?`<button class="sec" id="dpn" style="margin-top:6px">+ Agregar plan</button>`:""}
-    <h3 style="margin-top:14px">Documentos</h3><div class="tbl"><table>${doc("SOAT",v.soat_vence,v.docs.soat)}${doc("Inspección técnica",v.itv_vence,v.docs.itv)}${doc("Seguro",v.seguro_vence,v.docs.seguro)}${v.conductor?doc("Licencia de "+esc(v.conductor),v.licencia_vence,v.docs.licencia):""}</table></div>
+    <h3 style="margin-top:14px">Documentos</h3><div class="tbl"><table>${doc(esc(DOC1()),v.soat_vence,v.docs.soat)}${doc(esc(DOC2()),v.itv_vence,v.docs.itv)}${doc("Seguro",v.seguro_vence,v.docs.seguro)}${v.conductor?doc("Licencia de "+esc(v.conductor),v.licencia_vence,v.docs.licencia):""}</table></div>
+    <h3 style="margin-top:14px">Llantas y batería</h3><div id="dact"><p class="muted">Cargando…</p></div>
     <div class="acts">${can("vehiculos")?`<button class="sec" id="ded">Editar vehículo</button>`:""}<button class="sec" id="dqr">🏷️ Imprimir QR</button><button class="sec" id="dhi">Historial</button>${can("registrar")?`<button id="dre">➕ Registrar</button>`:""}<button class="sec" id="dx">Cerrar</button></div>`, B=>{
-    pintarFotos(B); B.querySelector("#dx").onclick=closeDlg; B.querySelector("#dqr").onclick=()=>etiquetaQR(v);
+    pintarFotos(B); B.querySelector("#dx").onclick=closeDlg; B.querySelector("#dqr").onclick=()=>etiquetaQR(v); pintarActivos(B,v);
     B.querySelector("#dhi").onclick=()=>{ closeDlg(); PRESEL={vehiculo_id:v.id}; go("historial"); };
     const re=B.querySelector("#dre"); if(re) re.onclick=()=>{ closeDlg(); PRESEL={vehiculo_id:v.id}; go("registrar"); };
     const ed=B.querySelector("#ded"); if(ed) ed.onclick=()=>vehiculoForm(v);
@@ -468,13 +481,14 @@ async function vehiculoForm(v){ await cargarCond(); let foto;
       <div class="field"><label>Kilometraje actual${v?" (corregir si está mal)":""}</label><input id="vkm" inputmode="numeric" value="${v?Math.round(v.km_actual):""}"></div></div>
     <div class="row"><div class="field"><label>Conductor asignado</label><select id="vco"><option value="">Sin conductor</option>${COND.filter(c=>c.activo).map(c=>`<option value="${c.id}" ${c.id===v?.conductor_id?"selected":""}>${esc(c.nombre)}</option>`).join("")}</select></div>
       <div class="field"><label>Estado</label><select id="ves">${[["activo","Activo"],["taller","En taller"],["baja","Dado de baja"]].map(([k,t])=>`<option value="${k}" ${k===(v?.estado||"activo")?"selected":""}>${t}</option>`).join("")}</select></div></div>
-    <div class="row"><div class="field"><label>SOAT vence</label><input type="date" id="vso" value="${v?.soat_vence||""}"></div><div class="field"><label>Inspección técnica vence</label><input type="date" id="vit" value="${v?.itv_vence||""}"></div><div class="field"><label>Seguro vence</label><input type="date" id="vse" value="${v?.seguro_vence||""}"></div></div>
+    <div class="row"><div class="field"><label>${esc(DOC1())} vence</label><input type="date" id="vso" value="${v?.soat_vence||""}"></div><div class="field"><label>${esc(DOC2())} vence</label><input type="date" id="vit" value="${v?.itv_vence||""}"></div><div class="field"><label>Seguro vence</label><input type="date" id="vse" value="${v?.seguro_vence||""}"></div></div>
+    <div class="row"><div class="field"><label>Presupuesto mensual (${esc(EMP.moneda)}, vacío = sin límite)</label><input id="vpr" inputmode="decimal" value="${v?.presupuesto_mes||""}" placeholder="Ej: 3500"></div></div>
     ${fotoCampo("vf","Foto del vehículo")}<div class="field"><label>Notas</label><textarea id="vn">${esc(v?.notas||"")}</textarea></div>
     ${v?"":'<p class="muted">Se crean planes de mantenimiento de ejemplo (aceite, filtro de aire, llantas, frenos) desde el kilometraje actual. Ajústalos después.</p>'}
     <div class="err" id="ve"></div><div class="acts"><button class="sec" id="vx">Cancelar</button><button id="vok">Guardar</button></div>`, B=>{
     enlazarFoto(B,"vf",d=>foto=d); B.querySelector("#vx").onclick=closeDlg;
     B.querySelector("#vok").onclick=async()=>{ try{ await api("vehiculos",{body:{id:v?.id,placa:val(B,"#vp"),sucursal_id:+(val(B,"#vs")||v?.sucursal_id||SUC),marca:val(B,"#vma"),modelo:val(B,"#vmo"),anio:val(B,"#van"),tipo:val(B,"#vt"),combustible:val(B,"#vc"),
-        tanque_l:val(B,"#vta").replace(",","."),rendimiento_esp:val(B,"#vre").replace(",","."),km_actual:val(B,"#vkm"),conductor_id:val(B,"#vco"),estado:val(B,"#ves"),soat_vence:val(B,"#vso"),itv_vence:val(B,"#vit"),seguro_vence:val(B,"#vse"),notas:val(B,"#vn"),foto}});
+        tanque_l:val(B,"#vta").replace(",","."),rendimiento_esp:val(B,"#vre").replace(",","."),km_actual:val(B,"#vkm"),conductor_id:val(B,"#vco"),estado:val(B,"#ves"),soat_vence:val(B,"#vso"),itv_vence:val(B,"#vit"),seguro_vence:val(B,"#vse"),notas:val(B,"#vn"),presupuesto_mes:val(B,"#vpr").replace(",","."),foto}});
       closeDlg(); toast("Vehículo guardado"); go(CUR); }catch(e){ B.querySelector("#ve").textContent=e.message; } }; }); }
 function planForm(v,p){ dialog(`<h3>${p?"Editar plan":"Nuevo plan"} · ${esc(v.placa)}</h3><div class="field"><label>Nombre *</label><input id="pn" value="${esc(p?.nombre||"")}" placeholder="Ej: Cambio de aceite"></div>
   <div class="row"><div class="field"><label>Cada (km)</label><input id="pk" inputmode="numeric" value="${p?.cada_km||""}"></div><div class="field"><label>y/o cada (días)</label><input id="pd" inputmode="numeric" value="${p?.cada_dias||""}"></div></div>
@@ -497,7 +511,7 @@ async function viewMantenimiento(){ await cargarVeh(); const ord={vencido:0,prox
   $("main").querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{ const [vi,pi]=b.dataset.r.split(":").map(Number); PRESEL={vehiculo_id:vi,tipo:"mantenimiento",plan_id:pi}; go("registrar"); }); }
 
 // ===================== Historial =====================
-async function viewHistorial(){ await cargarVeh(); await cargarProv(); const pre=PRESEL||{}; PRESEL=null; const rep=can("reportes");
+async function viewHistorial(){ await cargarVeh(); await cargarProv(); await cargarCond(); const pre=PRESEL||{}; PRESEL=null; const rep=can("reportes");
   $("main").innerHTML=`<h2>Historial</h2>${rep?"":'<p class="muted">Ves los registros que hiciste tú. Puedes corregirlos hasta 24 horas después.</p>'}<div class="toolbar"><div><label>Vehículo</label><select id="hv"><option value="">Todos</option>${VEH.map(v=>`<option value="${v.id}" ${v.id===pre.vehiculo_id?"selected":""}>${esc(v.placa)}</option>`).join("")}</select></div>
     <div><label>Tipo</label><select id="ht"><option value="">Todos</option>${Object.entries(TIPOS_EV).map(([k,[i,t]])=>`<option value="${k}">${i} ${t}</option>`).join("")}</select></div>
     <div><label>Desde</label><input type="date" id="hd" value="${daysAgo(30)}"></div><div><label>Hasta</label><input type="date" id="hh" value="${today()}"></div><button class="sec" id="hgo">Ver</button><button class="sec" id="hcsv">⬇️ CSV</button></div>
@@ -514,7 +528,7 @@ async function viewHistorial(){ await cargarVeh(); await cargarProv(); const pre
     $("hrows").querySelectorAll("tr[data-id]").forEach(tr=>tr.onclick=()=>detalleEvento(EV.find(x=>x.id==tr.dataset.id))); };
   const detalleEvento=e=>{ const propio=e.usuario_id===USER.id&&Date.now()-new Date(String(e.creado).replace(" ","T")+"Z")<24*3600e3, puedeEditar=!e.anulado&&(rep||propio);
     dialog(`<h3>${TIPOS_EV[e.tipo][0]} ${TIPOS_EV[e.tipo][1]} · ${esc(e.placa)}</h3><p class="muted">${fechaHora(e.fecha)} · ${esc(e.usuario||"")}${e.conductor?` · Conductor: ${esc(e.conductor)}`:""}</p>
-      <div class="tbl"><table>${[["Kilometraje",e.km!=null?fmtKm(e.km):""],["Litros",e.litros?fmtN(e.litros):""],["Precio por litro",e.litros&&e.monto?money(e.monto/e.litros):""],["Rendimiento",e.rendimiento?fmtN(e.rendimiento)+" km/l":""],["Monto",e.monto?money(e.monto):""],["Plan",e.plan||""],["Tipo de gasto",e.categoria||""],["Proveedor",e.proveedor||""],["Detalle",e.detalle||""],["Alerta",e.alerta||""]].filter(x=>x[1]).map(([a,b])=>`<tr><td>${a}</td><td>${esc(b)}</td></tr>`).join("")}</table></div>
+      <div class="tbl"><table>${[["Kilometraje",e.km!=null?fmtKm(e.km):""],["Litros",e.litros?fmtN(e.litros):""],["Precio por litro",e.litros&&e.monto?money(e.monto/e.litros):""],["Rendimiento",e.rendimiento?fmtN(e.rendimiento)+" km/l":""],["Monto",e.monto?money(e.monto):""],["Plan",e.plan||""],["Tipo de gasto",e.categoria||""],["Proveedor",e.proveedor||""],["N° factura",e.factura||""],["Conductor",e.conductor||""],["Detalle",e.detalle||""],["Alerta",e.alerta||""]].filter(x=>x[1]).map(([a,b])=>`<tr><td>${a}</td><td>${esc(b)}</td></tr>`).join("")}</table></div>
       <div class="row" style="margin-top:10px">${[e.foto1,e.foto2].filter(Boolean).map(k=>`<img data-k="${esc(k)}" alt="Foto" style="max-width:100%;border-radius:8px">`).join("")}</div>
       <div class="acts">${rep&&!e.anulado?`<button class="danger" id="han" style="margin-right:auto">Anular</button>`:""}${puedeEditar?`<button class="sec" id="hed">✏️ Corregir</button>`:""}<button id="hx">Cerrar</button></div>`, B=>{ pintarFotos(B); B.querySelector("#hx").onclick=closeDlg;
       const ed=B.querySelector("#hed"); if(ed) ed.onclick=()=>editarEvento(e);
@@ -526,12 +540,13 @@ async function viewHistorial(){ await cargarVeh(); await cargarProv(); const pre
       ${t==="combustible"?`<label class="check"><input type="checkbox" id="ell" ${e.lleno?"checked":""}> Tanque lleno</label>`:""}
       <div class="row">${f("ef","Fecha",String(e.fecha).slice(0,10),`type="date" max="${today()}"`)}${t==="gasto"?f("ec","Tipo de gasto",e.categoria):t==="kilometraje"?"":comboHTML("ep",ETIQ_PROV[TIPO_PROV[t]][0],provDe(TIPO_PROV[t]).length)}</div>
       ${t==="gasto"?comboHTML("ep","Proveedor",provDe("proveedor").length):""}${f("ed","Detalle",e.detalle)}
+      <div class="row">${t!=="kilometraje"?f("efa","N° de factura",e.factura||""):""}<div class="field"><label>Conductor (quién manejaba)</label>${selCond("eco",e.conductor_id||null)}</div></div>
       <p class="muted">Al guardar se recalculan el kilometraje actual del vehículo, el rendimiento de las cargas y la fecha del último mantenimiento.</p>
       <div class="err" id="ee"></div><div class="acts"><button class="sec" id="ex">Cancelar</button><button id="eok">Guardar</button></div>`, B=>{
       B.querySelector("#ex").onclick=()=>detalleEvento(e);
       const tp=TIPO_PROV[t], CB=B.querySelector("#ep")?combo(B,"ep",provDe(tp),{valor:e.proveedor||"",etiq:ETIQ_PROV[tp][2],plural:ETIQ_PROV[tp][1],nuevo:puedeProv()?n=>nuevoProv(tp,n):null}):null;
       B.querySelector("#eok").onclick=async()=>{ const pv=CB?CB.get():{proveedor:""}; if(pv.error) return B.querySelector("#ee").textContent=pv.error;
-        try{ await api("eventos",{body:{id:e.id,editar:true,km:val(B,"#ek").replace(",","."),litros:val(B,"#el").replace(",","."),monto:val(B,"#em").replace(",","."),lleno:B.querySelector("#ell")?B.querySelector("#ell").checked:true,fecha:val(B,"#ef"),proveedor:pv.proveedor,proveedor_id:pv.proveedor_id||null,categoria:val(B,"#ec"),detalle:val(B,"#ed")}});
+        try{ await api("eventos",{body:{id:e.id,editar:true,km:val(B,"#ek").replace(",","."),litros:val(B,"#el").replace(",","."),monto:val(B,"#em").replace(",","."),lleno:B.querySelector("#ell")?B.querySelector("#ell").checked:true,fecha:val(B,"#ef"),proveedor:pv.proveedor,proveedor_id:pv.proveedor_id||null,categoria:val(B,"#ec"),detalle:val(B,"#ed"),factura:val(B,"#efa"),conductor_id:val(B,"#eco")}});
         closeDlg(); toast("Registro corregido"); load(); }catch(x){ B.querySelector("#ee").textContent=x.message; } }; }); };
   $("hgo").onclick=()=>load().catch(e=>toast(e.message)); ["#hv","#ht"].forEach(s=>$("main").querySelector(s).onchange=$("hgo").onclick);
   $("hcsv").onclick=async()=>{ try{ const j=await api(`eventos?${filtro()}&csv=1`); const h=["Fecha","Placa","Tipo","Km","Litros","Precio/L","km/l","Monto","Plan","Categoría","Proveedor","Detalle","Conductor","Registró","Alerta","Anulado"];
@@ -542,7 +557,7 @@ async function viewHistorial(){ await cargarVeh(); await cargarProv(); const pre
 // ===================== Reportes =====================
 async function viewReportes(){
   $("main").innerHTML=`<h2>Reportes de costos</h2><div class="toolbar"><div><label>Desde</label><input type="date" id="rd" value="${daysAgo(29)}"></div><div><label>Hasta</label><input type="date" id="rh" value="${today()}"></div>
-    ${SUCS.length>1?`<div><label>Parqueo</label><select id="rs"><option value="">Todos</option>${SUCS.map(s=>`<option value="${s.id}">${esc(s.nombre)}</option>`).join("")}</select></div>`:""}<button class="sec" id="rgo">Ver</button><button class="sec" id="rcsv">Descargar CSV</button></div><div id="rout"></div>`;
+    ${SUCS.length>1?`<div><label>Parqueo</label><select id="rs"><option value="">Todos</option>${SUCS.map(s=>`<option value="${s.id}">${esc(s.nombre)}</option>`).join("")}</select></div>`:""}<button class="sec" id="rgo">Ver</button><button class="sec" id="rcsv">Descargar CSV</button><button class="sec" id="rcont" title="Todos los registros del período con proveedor, N° de factura y monto, listos para contabilidad">📒 Exportar contable</button></div><div id="rout"></div>`;
   let J=null;
   const load=async()=>{ const rs=$("rs")?.value||""; J=await api(`reportes?desde=${$("rd").value}&hasta=${$("rh").value}${rs?"&sucursal_id="+rs:""}`);
     const T=J.vehiculos.reduce((a,v)=>({total:a.total+v.total,comb:a.comb+v.combustible,km:a.km+(v.km||0),l:a.l+v.litros}),{total:0,comb:0,km:0,l:0});
@@ -552,12 +567,18 @@ async function viewReportes(){
       ${J.vehiculos.map(v=>`<tr><td><b>${esc(v.placa)}</b>${v.alertas?` <span class="chip warn">${v.alertas} alertas</span>`:""}</td><td class="n">${fmtQ(Math.round(v.km||0))}</td><td class="n">${fmtN(v.litros,0)}</td>
         <td class="n">${v.rendimiento?`<span class="${v.rendimiento_esp&&v.rendimiento<v.rendimiento_esp*.85?"err":""}">${fmtN(v.rendimiento)}</span>`:"—"}</td><td class="n">${money(v.combustible)}</td><td class="n">${money(v.mantenimiento)}</td><td class="n">${money(v.lavado)}</td><td class="n">${money(v.gastos)}</td>
         <td class="n"><b>${money(v.total)}</b></td><td class="n">${v.km?fmtN(v.total/v.km):"—"}</td></tr>`).join("")||'<tr><td colspan="10" class="muted">Sin datos en este período.</td></tr>'}</tbody></table></div>
+      ${J.conductores?.length?`<div class="card tbl" style="margin-top:12px"><h3>Por conductor <small class="muted">(quién manejaba en cada registro)</small></h3><table><thead><tr><th>Conductor</th><th class="n">Registros</th><th class="n">Vehículos</th><th class="n">Litros</th><th class="n">km/l</th><th class="n">Combustible</th><th class="n">Multas</th><th class="n">Total</th><th>Consumo</th></tr></thead><tbody>
+      ${J.conductores.map(c=>`<tr><td><b>${esc(c.nombre)}</b></td><td class="n">${c.registros}</td><td class="n">${c.vehiculos}</td><td class="n">${fmtN(c.litros,0)}</td><td class="n">${c.rendimiento?fmtN(c.rendimiento):"—"}</td><td class="n">${money(c.combustible)}</td><td class="n">${money(c.multas)}</td><td class="n"><b>${money(c.total)}</b></td><td>${c.consumo_alto?`<span class="chip warn">${c.consumo_alto} ${c.consumo_alto>1?"cargas":"carga"} con consumo alto</span>`:'<span class="chip ok">Normal</span>'}</td></tr>`).join("")}</tbody></table></div>`:""}
       <div class="row" style="align-items:flex-start;margin-top:12px"><div class="card tbl"><h3>Por tipo</h3><table>${J.tipos.map(t=>`<tr><td>${TIPOS_EV[t.tipo][0]} ${TIPOS_EV[t.tipo][1]}</td><td class="n">${t.cantidad}</td><td class="n">${money(t.total)}</td></tr>`).join("")||'<tr><td class="muted">Sin datos</td></tr>'}</table></div>
       <div class="card tbl"><h3>Por mes</h3><table>${J.meses.map(m=>`<tr><td>${esc(m.mes)}</td><td class="n">${money(m.total)}</td><td class="n muted">comb. ${money(m.combustible)}</td></tr>`).join("")||'<tr><td class="muted">Sin datos</td></tr>'}</table></div></div>`; };
   $("rgo").onclick=()=>load().catch(e=>toast(e.message));
   $("rcsv").onclick=()=>{ if(!J) return; const h=["Placa","Km","Litros","km/l","Combustible","Mantenimiento","Lavados","Otros","Total"];
     const csv=[h.join(";"),...J.vehiculos.map(v=>[v.placa,Math.round(v.km||0),v.litros,v.rendimiento?.toFixed(2)||"",v.combustible,v.mantenimiento,v.lavado,v.gastos,v.total].join(";"))].join("\n");
     descargar(csv,`flota_${$("rd").value}_${$("rh").value}.csv`); };
+  $("rcont").onclick=async()=>{ try{ const j=await api(`eventos?csv=1&desde=${$("rd").value}&hasta=${$("rh").value}`); const c=x=>`"${String(x??"").replace(/"/g,'""')}"`;
+    const csv=[["Fecha","Tipo","Placa","Parqueo","Proveedor","N° factura","Categoría / plan","Detalle","Km","Litros",`Monto (${EMP.moneda})`,"Conductor","Registró"].map(c).join(";"),
+      ...j.eventos.filter(e=>!e.anulado).map(e=>[fechaHora(e.fecha).split(",")[0],TIPOS_EV[e.tipo][1],e.placa,e.sucursal,e.proveedor,e.factura,e.plan||e.categoria,e.detalle,e.km!=null?Math.round(e.km):"",e.litros||"",e.monto||0,e.conductor,e.usuario].map(c).join(";"))].join("\n");
+    descargar(csv,`contable_${$("rd").value}_${$("rh").value}.csv`); if(j.mas) toast("El período tiene más de 5000 registros: acórtalo para exportar todo"); }catch(e){ toast(e.message); } };
   await load(); }
 
 // ===================== Conductores =====================
@@ -595,18 +616,104 @@ async function viewProveedores(){ await cargarProv(); let tp=PRESEL?.tipo_prov||
     try{ const r=await api("proveedores",{body:{importar:true}}); toast(r.importados?`Se agregaron ${r.importados} a la lista`:"No había nombres nuevos que importar"); await cargarProv(); pintar(); }catch(e){ toast(e.message); } };
   pintar(); }
 
+// ===================== Llantas y batería =====================
+async function pintarActivos(B,v){ const box=B.querySelector("#dact"); if(!box) return; let A=[]; try{ A=(await api("activos?vehiculo_id="+v.id)).activos; }catch(e){ box.innerHTML=`<p class="muted">${esc(e.message)}</p>`; return; }
+  const act=A.filter(a=>a.estado!=="retirado"), ret=A.filter(a=>a.estado==="retirado"), adm=puedeProv();
+  const fila=a=>{ const col=a.estado_vida==="vencido"?"var(--bad)":a.estado_vida==="proximo"?"var(--warn)":"var(--accent)";
+    return `<div style="padding:6px 0;border-top:1px solid var(--line)"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><div><b>${a.tipo==="llanta"?"🛞":"🔋"} ${esc(a.posicion||(a.tipo==="llanta"?"Llanta":"Batería"))}</b> <small class="muted">${esc([a.marca,a.detalle].filter(Boolean).join(" "))}</small>
+      <br><small class="muted">Desde ${fechaCorta(a.fecha_instalacion)} · ${fmtKm(a.km_recorrido)} recorridos${a.vida_km?` de ${fmtKm(a.vida_km)}`:""}${a.vida_meses?` · ${a.meses} de ${a.vida_meses} meses`:""}${a.costo?` · ${money(a.costo)}`:""}</small></div>
+      <div style="text-align:right;flex:none"><b style="color:${col}">${a.pct}%</b>${adm?`<br><button class="link" data-ae="${a.id}">Editar</button><button class="link" data-ar="${a.id}">Retirar</button>`:""}</div></div>
+      ${a.vida_km||a.vida_meses?`<div style="background:var(--bg);border-radius:6px;height:8px;overflow:hidden;margin-top:4px"><div style="height:100%;width:${Math.min(100,a.pct)}%;background:${col}"></div></div>`:""}</div>`; };
+  box.innerHTML=`${act.map(fila).join("")||'<p class="muted">Sin llantas ni batería registradas.</p>'}${ret.length?`<details style="margin-top:6px"><summary class="muted">Retirados (${ret.length})</summary>${ret.map(a=>`<div><small>${a.tipo==="llanta"?"🛞":"🔋"} ${esc(a.posicion||a.tipo)} ${esc(a.marca)} · ${fmtKm(a.km_recorrido)} · retirado ${fechaCorta(a.fecha_retiro)}${a.motivo_retiro?" · "+esc(a.motivo_retiro):""}</small></div>`).join("")}</details>`:""}
+    ${adm?`<div style="margin-top:6px"><button class="sec" id="dan">+ Llanta o batería</button></div>`:""}`;
+  const an=box.querySelector("#dan"); if(an) an.onclick=()=>activoForm(v,null);
+  box.querySelectorAll("[data-ae]").forEach(b=>b.onclick=()=>activoForm(v,A.find(a=>a.id==b.dataset.ae)));
+  box.querySelectorAll("[data-ar]").forEach(b=>b.onclick=()=>retirarActivo(v,A.find(a=>a.id==b.dataset.ar))); }
+function activoForm(v,a){ const POS=["Delantera izq.","Delantera der.","Trasera izq.","Trasera der.","Trasera izq. interior","Trasera der. interior","Repuesto"];
+  dialog(`<h3>${a?"Editar":"Instalar"} llanta o batería · ${esc(v.placa)}</h3><div class="row"><div class="field"><label>Tipo</label><select id="at"><option value="llanta" ${a?.tipo!=="bateria"?"selected":""}>Llanta</option><option value="bateria" ${a?.tipo==="bateria"?"selected":""}>Batería</option></select></div>
+    <div class="field"><label>Posición</label><input id="ap" list="apl" value="${esc(a?.posicion||"")}" placeholder="Ej: Delantera izq."><datalist id="apl">${POS.map(p=>`<option value="${p}">`).join("")}</datalist></div></div>
+    <div class="row"><div class="field"><label>Marca</label><input id="am" value="${esc(a?.marca||"")}"></div><div class="field"><label>Medida / modelo / serie</label><input id="ad" value="${esc(a?.detalle||"")}" placeholder="Ej: 265/65 R17"></div></div>
+    <div class="row"><div class="field"><label>Fecha de instalación</label><input type="date" id="af" value="${a?.fecha_instalacion||today()}" max="${today()}"></div><div class="field"><label>Km del vehículo al instalar</label><input id="ak" inputmode="numeric" value="${a?Math.round(a.km_instalacion):Math.round(v.km_actual)}"></div><div class="field"><label>Costo (${esc(EMP.moneda)})</label><input id="ac" inputmode="decimal" value="${a?.costo||""}"></div></div>
+    <div class="row"><div class="field"><label>Vida útil (km)</label><input id="avk" inputmode="numeric" value="${a?a.vida_km||"":"50000"}"></div><div class="field"><label>Vida útil (meses)</label><input id="avm" inputmode="numeric" value="${a?a.vida_meses||"":"36"}"></div></div>
+    ${a?"":`<label class="check"><input type="checkbox" id="ag" checked> Registrar el costo como gasto del vehículo</label><div class="row" style="margin-top:8px"><div class="field"><label>Proveedor</label><input id="apr"></div><div class="field"><label>N° de factura</label><input id="afa"></div></div>`}
+    <div class="field"><label>Nota</label><input id="an" value="${esc(a?.nota||"")}"></div><div class="err" id="ae"></div><div class="acts"><button class="sec" id="ax">Cancelar</button><button id="aok">Guardar</button></div>`, B=>{
+    B.querySelector("#ax").onclick=()=>vehiculoDetalle(v.id);
+    B.querySelector("#aok").onclick=async()=>{ try{ const r=await api("activos",{body:{id:a?.id,vehiculo_id:v.id,tipo:val(B,"#at"),posicion:val(B,"#ap"),marca:val(B,"#am"),detalle:val(B,"#ad"),fecha_instalacion:val(B,"#af"),km_instalacion:val(B,"#ak"),costo:val(B,"#ac").replace(",","."),vida_km:val(B,"#avk"),vida_meses:val(B,"#avm"),nota:val(B,"#an"),
+        registrar_gasto:a?false:B.querySelector("#ag").checked,proveedor:val(B,"#apr"),factura:val(B,"#afa")}}); toast(r.gasto?"Guardado y registrado como gasto del vehículo":"Guardado"); await cargarVeh(); vehiculoDetalle(v.id); }
+      catch(e){ B.querySelector("#ae").textContent=e.message; } }; }); }
+async function retirarActivo(v,a){ const m=await pregunta({titulo:`Retirar ${a.tipo==="llanta"?"llanta":"batería"} ${a.posicion||""}`,texto:`Se tomará el kilometraje actual del vehículo (${fmtKm(v.km_actual)}) como km de retiro.`,input:"Motivo (desgaste, pinchazo, falla…)",ok:"Retirar"}); if(m===null) return;
+  try{ await api("activos",{body:{id:a.id,retirar:true,motivo:m}}); toast("Retirada"); await cargarVeh(); vehiculoDetalle(v.id); }catch(e){ toast(e.message); } }
+
+// ===================== Repuestos =====================
+async function viewRepuestos(){ await cargarVeh(); let J=await api("repuestos"), q="";
+  $("main").innerHTML=`<h2>Repuestos</h2><div class="toolbar"><div class="grow"><label>Buscar</label><input id="rq" placeholder="Nombre o código"></div><label class="check" style="margin-bottom:8px"><input type="checkbox" id="rmin"> Solo bajo mínimo</label><button id="rnew">+ Nuevo repuesto</button></div>
+    <p class="muted">Una <b>salida</b> con vehículo registra el gasto en ese vehículo (categoría Repuesto). Cuando el stock llega al mínimo aparece en el Dashboard y en el recordatorio diario.</p><div id="rlist"></div>`;
+  const pintar=()=>{ const l=J.repuestos.filter(r=>(!$("rmin").checked||(r.activo&&r.minimo>0&&r.stock<=r.minimo))&&(!q||(r.nombre+" "+r.codigo).toLowerCase().includes(q)));
+    $("rlist").innerHTML=`<div class="card tbl"><table><thead><tr><th>Repuesto</th><th>Código</th><th class="n">Stock</th><th class="n">Mínimo</th><th class="n">Costo unit.</th><th class="n">Valor</th><th></th></tr></thead><tbody>${l.map(r=>{ const bajo=r.activo&&r.minimo>0&&r.stock<=r.minimo;
+      return `<tr style="${r.activo?"":"opacity:.5"}"><td><b class="click" data-h="${r.id}" style="cursor:pointer" title="Ver movimientos">${esc(r.nombre)}</b>${r.activo?"":' <span class="chip">inactivo</span>'}</td><td><small>${esc(r.codigo)}</small></td><td class="n"><span class="chip ${bajo?(r.stock<=0?"bad":"warn"):"ok"}">${fmtQ(r.stock)} ${esc(r.unidad)}</span></td><td class="n">${fmtQ(r.minimo)}</td><td class="n">${money(r.costo)}</td><td class="n">${money(r.stock*r.costo)}</td>
+        <td style="white-space:nowrap"><button class="link" data-in="${r.id}">⬇ Entrada</button><button class="link" data-out="${r.id}">⬆ Salida</button><button class="link" data-ed="${r.id}">Editar</button></td></tr>`; }).join("")||'<tr><td colspan="7" class="muted">Sin repuestos.</td></tr>'}</tbody></table></div>
+      <p class="muted">Valor del inventario: <b>${money(J.repuestos.filter(r=>r.activo).reduce((a,r)=>a+r.stock*r.costo,0))}</b></p>`;
+    $("rlist").querySelectorAll("[data-ed]").forEach(b=>b.onclick=()=>form(J.repuestos.find(r=>r.id==b.dataset.ed)));
+    $("rlist").querySelectorAll("[data-in]").forEach(b=>b.onclick=()=>mov(J.repuestos.find(r=>r.id==b.dataset.in),"entrada"));
+    $("rlist").querySelectorAll("[data-out]").forEach(b=>b.onclick=()=>mov(J.repuestos.find(r=>r.id==b.dataset.out),"salida"));
+    $("rlist").querySelectorAll("[data-h]").forEach(b=>b.onclick=()=>hist(J.repuestos.find(r=>r.id==b.dataset.h))); };
+  const recargar=async()=>{ J=await api("repuestos"); pintar(); };
+  const form=r=>dialog(`<h3>${r?"Editar":"Nuevo"} repuesto</h3><div class="row"><div class="field"><label>Nombre *</label><input id="pn" value="${esc(r?.nombre||"")}"></div><div class="field"><label>Código</label><input id="pc" value="${esc(r?.codigo||"")}"></div></div>
+    <div class="row"><div class="field"><label>Unidad</label><input id="pu" list="pul" value="${esc(r?.unidad||"unidad")}"><datalist id="pul"><option value="unidad"><option value="litro"><option value="juego"><option value="par"><option value="metro"></datalist></div><div class="field"><label>Stock mínimo</label><input id="pm" inputmode="decimal" value="${r?.minimo||""}"></div><div class="field"><label>Costo unitario (${esc(EMP.moneda)})</label><input id="pco" inputmode="decimal" value="${r?.costo||""}"></div></div>
+    ${r?`<label class="check"><input type="checkbox" id="pa" ${r.activo?"checked":""}> Activo</label>`:`<div class="field"><label>Stock inicial</label><input id="ps" inputmode="decimal" value="0"></div>`}<div class="err" id="pe"></div><div class="acts"><button class="sec" id="px">Cancelar</button><button id="pok">Guardar</button></div>`, B=>{
+    B.querySelector("#px").onclick=closeDlg;
+    B.querySelector("#pok").onclick=async()=>{ try{ await api("repuestos",{body:{id:r?.id,nombre:val(B,"#pn"),codigo:val(B,"#pc"),unidad:val(B,"#pu"),minimo:val(B,"#pm").replace(",","."),costo:val(B,"#pco").replace(",","."),stock:val(B,"#ps").replace(",","."),activo:r?B.querySelector("#pa").checked:true}}); closeDlg(); toast("Guardado"); recargar(); }
+      catch(e){ B.querySelector("#pe").textContent=e.message; } }; });
+  const mov=(r,tipo)=>dialog(`<h3>${tipo==="entrada"?"⬇ Entrada":"⬆ Salida"} · ${esc(r.nombre)}</h3><p class="muted">Stock actual: <b>${fmtQ(r.stock)} ${esc(r.unidad)}</b></p>
+    <div class="row"><div class="field"><label>Cantidad *</label><input id="mc" inputmode="decimal"></div><div class="field"><label>Costo unitario (${esc(EMP.moneda)})</label><input id="mco" inputmode="decimal" value="${r.costo||""}"></div></div>
+    ${tipo==="salida"?`<div class="field"><label>Vehículo (registra el gasto en su historial)</label><select id="mv"><option value="">Sin vehículo (uso general)</option>${VEH.filter(v=>v.estado!=="baja").map(v=>`<option value="${v.id}">${esc(v.placa)} · ${esc(v.marca)} ${esc(v.modelo)}</option>`).join("")}</select></div>`:""}
+    <div class="field"><label>Nota</label><input id="mn" placeholder="${tipo==="entrada"?"Proveedor, factura…":"Trabajo realizado…"}"></div><div class="err" id="me"></div><div class="acts"><button class="sec" id="mx">Cancelar</button><button id="mok">Guardar</button></div>`, B=>{
+    B.querySelector("#mx").onclick=closeDlg;
+    B.querySelector("#mok").onclick=async()=>{ try{ const j=await api("repuestos",{body:{movimiento:{repuesto_id:r.id,tipo,cantidad:val(B,"#mc").replace(",","."),costo:val(B,"#mco").replace(",","."),vehiculo_id:val(B,"#mv")||null,nota:val(B,"#mn")}}}); closeDlg(); toast(`Stock: ${fmtQ(j.stock)} ${r.unidad}${j.evento_id?" · gasto registrado en el vehículo":""}`); recargar(); }
+      catch(e){ B.querySelector("#me").textContent=e.message; } }; });
+  const hist=async r=>{ const j=await api("repuestos?movimientos="+r.id);
+    dialog(`<h3>${esc(r.nombre)} · movimientos</h3><div class="tbl"><table><thead><tr><th>Fecha</th><th>Tipo</th><th class="n">Cantidad</th><th>Vehículo</th><th>Nota</th><th>Por</th></tr></thead><tbody>${j.movimientos.map(m=>`<tr><td>${fechaHora(m.fecha)}</td><td>${m.tipo}</td><td class="n">${m.tipo==="salida"?"-":"+"}${fmtQ(Math.abs(m.cantidad))}</td><td>${esc(m.placa||"")}</td><td><small>${esc(m.nota||"")}</small></td><td><small>${esc(m.usuario||"")}</small></td></tr>`).join("")||'<tr><td colspan="6" class="muted">Sin movimientos.</td></tr>'}</tbody></table></div><div class="acts"><button id="hx">Cerrar</button></div>`, B=>{ B.querySelector("#hx").onclick=closeDlg; }); };
+  $("rq").oninput=()=>{ q=$("rq").value.toLowerCase(); pintar(); }; $("rmin").onchange=pintar; $("rnew").onclick=()=>form(null); pintar(); }
+
+// ===================== Ficha pública por QR (sin usuario) =====================
+async function fichaPublica(cod){ show("vPub"); const B=$("pubBody"); B.innerHTML='<p class="muted">Cargando…</p>';
+  const irLogin=()=>{ show("vLogin"); $("lgUser").focus(); };
+  try{ const j=await api("publico?v="+encodeURIComponent(cod)); const v=j.vehiculo, chip=e=>`<span class="chip ${e==="vencido"?"bad":e==="proximo"?"warn":"ok"}">${e==="vencido"?"Vencido":e==="proximo"?"Próximo":"Al día"}</span>`;
+    B.innerHTML=`<div class="muted">${esc(j.empresa)}</div><h2 style="margin:4px 0">${esc(v.placa)}</h2><div class="muted">${esc([v.marca,v.modelo,v.anio,v.tipo].filter(Boolean).join(" · "))}${v.combustible?" · "+esc(v.combustible):""}</div><div>${fmtKm(v.km_actual)}${v.conductor?` · 👤 ${esc(v.conductor)}`:""}</div>
+      <h3 style="margin-top:14px">Mantenimiento preventivo</h3><div class="tbl"><table><thead><tr><th>Plan</th><th>Último</th><th>Próximo</th><th></th></tr></thead><tbody>${j.planes.map(p=>`<tr><td>${esc(p.nombre)}</td><td><small>${p.ultima_fecha?fechaCorta(p.ultima_fecha):"—"}${p.ultimo_km?"<br>"+fmtKm(p.ultimo_km):""}</small></td><td><small>${p.proxKm!=null?fmtKm(p.proxKm):""}${p.proxKm!=null&&p.proxFecha?" / ":""}${p.proxFecha?fechaCorta(p.proxFecha):""}</small></td><td>${chip(p.estado)}</td></tr>`).join("")||'<tr><td colspan="4" class="muted">Sin planes.</td></tr>'}</tbody></table></div>
+      ${j.documentos.length?`<h3 style="margin-top:14px">Documentos</h3><div class="tbl"><table>${j.documentos.map(d=>`<tr><td>${esc(d.nombre)}</td><td>${fechaCorta(d.fecha)}</td><td>${chip(d.estado)}</td></tr>`).join("")}</table></div>`:""}
+      <h3 style="margin-top:14px">Últimos mantenimientos</h3><div class="tbl"><table>${j.mantenimientos.map(m=>`<tr><td>${fechaCorta(m.fecha)}</td><td>${esc(m.plan||m.detalle||"Correctivo")}</td><td><small>${esc(m.proveedor||"")}</small></td><td class="n">${m.km!=null?fmtKm(m.km):""}</td></tr>`).join("")||'<tr><td class="muted">Sin mantenimientos registrados.</td></tr>'}</table></div>
+      <div class="acts" style="justify-content:flex-start">${j.whatsapp?`<a class="btn sec" href="https://wa.me/${String(j.whatsapp).length===8?"591"+j.whatsapp:j.whatsapp}" target="_blank" rel="noopener">💬 Contactar a la empresa</a>`:""}<button id="pubLogin">Ingresar para registrar</button></div>`;
+    $("pubLogin").onclick=irLogin; }
+  catch(e){ B.innerHTML=`<p class="err">${esc(e.message)}</p><div class="acts" style="justify-content:flex-start"><button id="pubLogin">Ingresar</button></div>`; $("pubLogin").onclick=irLogin; } }
+
 // ===================== Empresa =====================
-async function viewConfig(){ const P=USER.plan||{};
+async function viewConfig(){ const P=USER.plan||{}; const PA={BO:"Bolivia",PE:"Perú",AR:"Argentina",CL:"Chile",CO:"Colombia",EC:"Ecuador",PY:"Paraguay",UY:"Uruguay",MX:"México",OT:"Otro país"};
+  const PRE={BO:["Bs",-4,"SOAT","Inspección técnica"],PE:["S/",-5,"SOAT","Revisión técnica"],AR:["$",-3,"Seguro obligatorio","VTV"],CL:["$",-4,"SOAP","Revisión técnica"],CO:["$",-5,"SOAT","Revisión técnico-mecánica"],EC:["$",-5,"SPPAT","Revisión vehicular"],PY:["Gs",-4,"Seguro obligatorio","Inspección técnica"],UY:["$",-3,"SOA","Inspección técnica"],MX:["$",-6,"Seguro obligatorio","Verificación vehicular"],OT:["$",0,"Seguro obligatorio","Inspección técnica"]};
   $("main").innerHTML=`<h2>Datos de la empresa</h2><div class="card" style="max-width:640px">
     <div class="field"><label>Nombre</label><input id="cn" value="${esc(EMP.nombre)}"></div>
-    <div class="row"><div class="field"><label>WhatsApp</label><input id="cw" inputmode="tel" value="${esc(EMP.whatsapp||"")}"></div><div class="field"><label>Moneda</label><input id="cm" value="${esc(EMP.moneda)}"></div></div>
+    <div class="row"><div class="field"><label>WhatsApp</label><input id="cw" inputmode="tel" value="${esc(EMP.whatsapp||"")}"></div><div class="field"><label>Correo de contacto</label><input id="ce" type="email" value="${esc(EMP.email||"")}"></div></div>
     <div class="field"><label>Dirección</label><input id="cd" value="${esc(EMP.direccion||"")}"></div>
+    <h3>País, moneda y documentos</h3>
+    <div class="row"><div class="field"><label>País</label><select id="cp">${Object.entries(PA).map(([k,n])=>`<option value="${k}" ${k===(EMP.pais||"BO")?"selected":""}>${n}</option>`).join("")}</select></div><div class="field"><label>Moneda</label><input id="cm" value="${esc(EMP.moneda)}"></div><div class="field"><label>Zona horaria (horas respecto a UTC)</label><input id="ctz" inputmode="numeric" value="${EMP.tz??-4}"></div></div>
+    <div class="row"><div class="field"><label>Documento obligatorio 1</label><input id="cd1" value="${esc(EMP.doc1||"SOAT")}"></div><div class="field"><label>Documento obligatorio 2</label><input id="cd2" value="${esc(EMP.doc2||"Inspección técnica")}"></div></div>
+    <p class="muted">Al cambiar el país se proponen la moneda, la zona horaria y los nombres de los documentos; puedes ajustarlos.</p>
+    <h3>Control</h3>
     <div class="row"><div class="field"><label>Alertar si el rendimiento cae más de (%)</label><input id="ctc" inputmode="numeric" value="${EMP.tolerancia_consumo}"></div><div class="field"><label>Guardar fotos durante (días)</label><input id="cr" inputmode="numeric" value="${EMP.retencion_fotos}"></div></div>
-    <p class="muted">Ejemplo: con 20%, un vehículo que debería hacer 10 km/l da alerta si baja de 8 km/l.</p>
-    <div class="acts" style="justify-content:flex-start"><button id="cok">Guardar</button></div></div>
+    <label class="check"><input type="checkbox" id="cfo" ${EMP.foto_obligatoria?"checked":""}> Exigir foto de la factura en combustible y mantenimiento</label>
+    <label class="check" style="margin-top:6px"><input type="checkbox" id="cfp" ${EMP.ficha_publica!==0?"checked":""}> Ficha pública del vehículo al escanear su QR sin usuario (talleres ven planes y documentos, nunca costos)</label>
+    <h3 style="margin-top:14px">Recordatorio diario por correo</h3>
+    <div class="field"><label>Correo(s) que reciben el resumen cada mañana</label><input id="cea" placeholder="jefe@empresa.com, gerencia@empresa.com" value="${esc(EMP.email_avisos||"")}"></div>
+    <p class="muted">Mantenimientos vencidos y próximos, documentos por vencer, presupuesto superado y repuestos bajo mínimo. Guarda primero y luego envía una prueba.</p>
+    <div class="acts" style="justify-content:flex-start"><button id="cok">Guardar</button><button class="sec" id="cprueba">✉️ Enviar prueba ahora</button><button class="sec" id="cver">Ver resumen de hoy</button></div><div id="cenv"></div></div>
     <div class="card" style="max-width:640px;margin-top:12px"><h3>Tu plan: ${esc(P.nombre||"")}</h3><p>Vence: <b>${esc(EMP.vence||"sin vencimiento")}</b></p><p class="muted">Hasta ${P.vehiculos??"ilimitados"} vehículos, ${P.sucursales??"ilimitados"} parqueos y ${P.usuarios??"ilimitados"} usuarios.</p></div>`;
-  $("cok").onclick=async()=>{ try{ EMP=(await api("config",{body:{nombre:$("cn").value,whatsapp:$("cw").value,moneda:$("cm").value,direccion:$("cd").value,tolerancia_consumo:$("ctc").value,retencion_fotos:$("cr").value}})).empresa;
-    $("brand").textContent=EMP.nombre; toast("Guardado"); }catch(e){ toast(e.message); } }; }
+  $("cp").onchange=()=>{ const p=PRE[$("cp").value]; if(!p) return; $("cm").value=p[0]; $("ctz").value=p[1]; $("cd1").value=p[2]; $("cd2").value=p[3]; };
+  $("cok").onclick=async()=>{ try{ EMP=(await api("config",{body:{nombre:$("cn").value,whatsapp:$("cw").value,email:$("ce").value,moneda:$("cm").value,direccion:$("cd").value,tolerancia_consumo:$("ctc").value,retencion_fotos:$("cr").value,pais:$("cp").value,tz:$("ctz").value,doc1:$("cd1").value,doc2:$("cd2").value,
+      foto_obligatoria:$("cfo").checked,ficha_publica:$("cfp").checked,email_avisos:$("cea").value}})).empresa; USER.empresa=EMP; ls.set("ag-user",JSON.stringify(USER));
+    $("brand").textContent=EMP.nombre; toast("Guardado"); }catch(e){ toast(e.message); } };
+  const probar=async enviar=>{ $("cenv").innerHTML='<p class="muted">Generando…</p>'; try{ const j=await api("recordatorios",{body:{probar:true,enviar}});
+    $("cenv").innerHTML=`<div class="card" style="margin-top:10px;background:var(--bg)">${enviar?`<p>${j.enviado?`✅ Enviado a ${esc(j.correo)}`:`⚠️ No se envió: ${esc(j.error||"")}`}</p>`:""}<pre style="white-space:pre-wrap;font:inherit;margin:0">${esc(j.texto)}</pre></div>`; }catch(e){ $("cenv").innerHTML=`<p class="err">${esc(e.message)}</p>`; } };
+  $("cprueba").onclick=()=>probar(true); $("cver").onclick=()=>probar(false); }
 // ===================== Ayuda guiada =====================
 // Cada paso: [selector, título, texto]. Los pasos cuyo elemento no existe (por permisos) se saltan solos.
 const TOURS={
@@ -619,6 +726,7 @@ const TOURS={
   mantenimiento:[["#main .card","Planes de toda la flota","Primero lo vencido. Toca Registrar cuando se haga el mantenimiento y el próximo se recalcula solo."]],
   reportes:[["#rout .kpis","Costos","Gasto total, combustible, recorrido y costo por km del período. Descarga el detalle en CSV para Excel."]],
   conductores:[["#cnew","Conductores","Con su licencia y vencimiento: te avisamos antes de que venza."]],
+  repuestos:[["#rnew","Repuestos","Stock con mínimo. Las salidas con vehículo entran como gasto de ese vehículo y lo que baja del mínimo aparece en el Dashboard."]],
   proveedores:[["#pnew","Proveedores","Talleres, estaciones de servicio y lavaderos. Al registrar, el conductor solo puede elegir uno de esta lista con buscador."],["#pimp","Importar del historial","Si ya venías registrando, crea la lista con los nombres que ya usaste."]],
   sucursales:[["#snew","Parqueos","Crea un parqueo por cada base o garaje y asigna ahí sus vehículos."]],usuarios:[["#unew","Usuarios","Perfiles listos: Administrador, Jefe de flota o Conductor."]],
   config:[["#ctc","Alertas de consumo","Cuánto puede bajar el rendimiento antes de avisar."]]

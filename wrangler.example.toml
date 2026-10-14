@@ -17,3 +17,10 @@ database_id = "00000000-0000-0000-0000-000000000000"   # reemplaza por el id rea
 [vars]
 # Clave para crear el primer administrador de la plataforma (solo se usa una vez). En producción ponla como secreto.
 SETUP_KEY = "cambia-esta-clave"
+
+# Variables opcionales (en Cloudflare Pages se definen en Settings > Environment variables):
+# RESEND_KEY = "re_xxx"                       # correo con Resend (recordatorio diario, aviso de registros)
+# MAIL_FROM = "FlotaControl <avisos@tudominio.com>"
+# CRON_KEY = "clave-para-el-cron"             # GET /api/recordatorios?key=...  (si falta se usa SETUP_KEY)
+# MAIL_ADMIN = "tu@correo.com"                # aviso cuando una empresa se registra desde la landing
+# REGISTRO_ABIERTO = "0"                      # cierra el registro desde la landing

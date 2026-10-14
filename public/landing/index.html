@@ -76,6 +76,10 @@ details{background:var(--card);border:1px solid var(--line);border-radius:12px;p
 footer{background:#04122F;color:#9FB2E6;padding:28px 0;font-size:.9rem}footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}footer a{color:#C9D6FF}
 .demo{background:var(--card);border:1px dashed var(--blue);border-radius:12px;padding:14px 18px;display:inline-block;text-align:left;margin-top:8px}
 .demo code{background:#DFE8FF;padding:2px 8px;border-radius:6px;font-weight:600}
+/* formulario de registro */
+.f{margin-bottom:12px}.f label{display:block;font-weight:600;font-size:.9rem;margin-bottom:4px}.f input,.f select{width:100%;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+.f input:focus,.f select:focus{outline:3px solid #BFD0FF;border-color:var(--blue)}.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media (max-width:600px){.g2{grid-template-columns:1fr}}
+.ferr{color:var(--bad);font-weight:600;min-height:1.3em;margin:6px 0}
 /* WhatsApp flotante */
 .fab{position:fixed;right:16px;bottom:16px;z-index:20;box-shadow:0 10px 30px rgba(0,0,0,.25);border-radius:99px}
 @media (prefers-reduced-motion:reduce){.btn,html{transition:none;scroll-behavior:auto}}
@@ -84,7 +88,7 @@ footer{background:#04122F;color:#9FB2E6;padding:28px 0;font-size:.9rem}footer .w
 <body>
 <header class="top"><div class="wrap">
   <a class="brand" href="#"><img src="/icon.svg" alt="">Flota<span>Control</span></a>
-  <nav><a href="#funciones">Funciones</a><a href="#como">Cómo funciona</a><a href="#planes">Planes</a><a href="#faq">Preguntas</a></nav>
+  <nav><a href="#funciones">Funciones</a><a href="#como">Cómo funciona</a><a href="#planes">Planes</a><a href="#demo">Demo</a><a href="#registro">Crear cuenta</a></nav>
   <a class="btn sec" href="/">Ingresar</a>
 </div></header>
 
@@ -95,7 +99,7 @@ footer{background:#04122F;color:#9FB2E6;padding:28px 0;font-size:.9rem}footer .w
     <p class="lead">FlotaControl te avisa qué mantenimiento toca, detecta cuando un vehículo gasta más combustible de lo normal y te dice cuánto cuesta cada kilómetro. Tus conductores registran desde el celular en 20 segundos, con o sin señal.</p>
     <div class="ctas">
       <a class="btn wa" data-wa href="#contacto">💬 Pedir una demostración</a>
-      <a class="btn sec" href="#demo">Probar la demo ahora</a>
+      <a class="btn sec" href="#registro">Crear mi cuenta gratis</a>
     </div>
     <small>Sin instalación. Sin contrato. Funciona en cualquier celular o computadora.</small>
   </div>
@@ -160,7 +164,7 @@ footer{background:#04122F;color:#9FB2E6;padding:28px 0;font-size:.9rem}footer .w
       <ul><li>Hasta 5 vehículos</li><li>5 usuarios</li><li>1 parqueo</li><li>Mantenimiento, combustible y costos</li><li>App para el celular con QR</li></ul>
       <a class="btn light" data-wa data-plan="Básico" href="#contacto">Quiero este plan</a></div>
     <div class="card best"><h3>Flota</h3><div class="price">Bs 249<small>/mes</small></div><div class="per">Para empresas en crecimiento</div>
-      <ul><li>Hasta 25 vehículos</li><li>20 usuarios</li><li>3 parqueos o bases</li><li>Todo lo del plan Básico</li><li>Permisos por parqueo</li><li>Resumen por WhatsApp</li></ul>
+      <ul><li>Hasta 50 vehículos</li><li>50 usuarios</li><li>5 parqueos o bases</li><li>Todo lo del plan Básico</li><li>Permisos por parqueo</li><li>Resumen por WhatsApp</li></ul>
       <a class="btn pri" data-wa data-plan="Flota" href="#contacto">Quiero este plan</a></div>
     <div class="card"><h3>Empresa</h3><div class="price">Bs 499<small>/mes</small></div><div class="per">Sin límites</div>
       <ul><li>Vehículos ilimitados</li><li>Usuarios ilimitados</li><li>Parqueos ilimitados</li><li>Todo lo del plan Flota</li><li>Acompañamiento en la puesta en marcha</li></ul>
@@ -176,7 +180,21 @@ footer{background:#04122F;color:#9FB2E6;padding:28px 0;font-size:.9rem}footer .w
   <div style="margin-top:18px"><a class="btn pri" href="/" target="_blank" rel="noopener">Abrir la demo</a></div>
 </div></section>
 
-<section id="faq"><div class="wrap" style="max-width:760px">
+<section id="registro"><div class="wrap" style="max-width:680px">
+  <h2 class="center">Crea tu cuenta gratis</h2>
+  <p class="sub center">30 días de prueba con el plan Flota, sin tarjeta y sin compromiso. En dos minutos estás cargando tus vehículos.</p>
+  <form id="regForm" class="card" novalidate>
+    <div class="f"><label for="rEmp">Nombre de tu empresa *</label><input id="rEmp" required autocomplete="organization"></div>
+    <div class="g2"><div class="f"><label for="rNom">Tu nombre *</label><input id="rNom" required autocomplete="name"></div><div class="f"><label for="rPais">País</label><select id="rPais"><option value="BO">Bolivia</option><option value="PE">Perú</option><option value="AR">Argentina</option><option value="CL">Chile</option><option value="CO">Colombia</option><option value="EC">Ecuador</option><option value="PY">Paraguay</option><option value="UY">Uruguay</option><option value="MX">México</option><option value="OT">Otro país</option></select></div></div>
+    <div class="g2"><div class="f"><label for="rTel">WhatsApp con código de país *</label><input id="rTel" inputmode="tel" placeholder="59170000000" required autocomplete="tel"></div><div class="f"><label for="rMail">Correo *</label><input id="rMail" type="email" required autocomplete="email"></div></div>
+    <div class="g2"><div class="f"><label for="rUser">Usuario para ingresar *</label><input id="rUser" autocapitalize="none" required autocomplete="username"></div><div class="f"><label for="rPass">Contraseña (mínimo 8) *</label><input id="rPass" type="password" required autocomplete="new-password"></div></div>
+    <div class="ferr" id="rErr"></div>
+    <button class="btn pri" type="submit" id="rBtn" style="width:100%">Crear mi cuenta y entrar</button>
+    <small class="muted" style="display:block;margin-top:10px;text-align:center">Te escribiremos por WhatsApp para ayudarte con la puesta en marcha. Sin cobros automáticos.</small>
+  </form>
+</div></section>
+
+<section id="faq" style="background:#fff"><div class="wrap" style="max-width:760px">
   <h2 class="center">Preguntas frecuentes</h2>
   <details><summary>¿Mis conductores necesitan un celular especial?</summary><p>No. Funciona en cualquier Android o iPhone desde el navegador, y se puede "instalar" en la pantalla de inicio como una app. No ocupa casi espacio.</p></details>
   <details><summary>¿Qué pasa donde no hay señal?</summary><p>El registro se guarda en el teléfono y se envía solo cuando vuelve la conexión. El conductor no tiene que hacer nada.</p></details>
@@ -205,6 +223,18 @@ document.querySelectorAll("[data-wa]").forEach(a => {
   a.href = "https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent("Hola, quiero una demostración de FlotaControl para mi empresa." + plan);
   a.target = "_blank"; a.rel = "noopener";
 });
+// Registro de empresa (prueba gratis). Si el registro está cerrado en el servidor, se oculta la sección.
+fetch("/api/registro").then(r => r.json()).then(j => { if (j && j.abierto === false) document.getElementById("registro").style.display = "none"; }).catch(() => {});
+const v = id => document.getElementById(id).value.trim();
+document.getElementById("regForm").onsubmit = async e => {
+  e.preventDefault(); const err = document.getElementById("rErr"), btn = document.getElementById("rBtn"); err.textContent = ""; btn.disabled = true;
+  try {
+    const r = await fetch("/api/registro", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ empresa: v("rEmp"), nombre: v("rNom"), pais: v("rPais"), telefono: v("rTel"), email: v("rMail"), usuario: v("rUser"), password: document.getElementById("rPass").value }) });
+    const j = await r.json(); if (!j.ok) throw new Error(j.error || "No se pudo crear la cuenta");
+    try { localStorage.setItem("ag-token", j.token); } catch (x) {}
+    btn.textContent = "¡Cuenta creada! Entrando…"; location.href = "/";
+  } catch (x) { err.textContent = x.message; btn.disabled = false; }
+};
 </script>
 </body>
 </html>

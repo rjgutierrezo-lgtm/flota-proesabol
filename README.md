@@ -30,6 +30,26 @@ La página de venta está en `public/landing/index.html` y se sirve en `/landing
 
 Para el límite de intentos de login y el bloqueo por IP la app usa D1. Si quieres una capa extra, agrega una regla de *rate limiting* de Cloudflare sobre `/api/login`.
 
+### Variables de entorno opcionales
+
+| Variable | Para qué |
+|---|---|
+| `RESEND_KEY` y `MAIL_FROM` | Envío de correo con [Resend](https://resend.com): recordatorio diario y aviso de registros nuevos. `MAIL_FROM` es el remitente verificado, por ejemplo `FlotaControl <avisos@tudominio.com>`. |
+| `CRON_KEY` | Clave del recordatorio automático (si falta, se usa `SETUP_KEY`). |
+| `MAIL_ADMIN` | Correo del dueño de la plataforma: recibe un aviso cada vez que una empresa se registra desde la landing. |
+| `REGISTRO_ABIERTO` | `0` cierra el registro de empresas desde la landing (por defecto está abierto, con 30 días de prueba). |
+
+### Recordatorio diario automático
+
+El endpoint `GET /api/recordatorios?key=CRON_KEY` genera el resumen de cada empresa (mantenimientos vencidos y próximos, documentos por vencer, presupuesto superado, repuestos bajo mínimo) y lo envía al correo configurado en **Empresa → Recordatorio diario**. No repite el envío si ya se hizo ese día.
+
+Cloudflare Pages no tiene cron propio, así que programa la llamada una vez al día (por ejemplo a las 07:00) con cualquiera de estas opciones:
+
+- Un servicio gratuito como [cron-job.org](https://cron-job.org) apuntando a `https://TU-DOMINIO/api/recordatorios?key=CRON_KEY`.
+- Un Worker de Cloudflare con *Cron Trigger* cuyo `scheduled()` haga `fetch` a esa URL.
+
+En **Empresa** hay un botón "Enviar prueba ahora" para verificar la configuración y otro para ver el resumen del día sin enviarlo.
+
 ## Correr en local
 
 ```bash
@@ -61,6 +81,14 @@ Un usuario puede limitarse a ciertos parqueos: solo ve y registra los vehículos
 - **Proveedores**: lista de talleres, estaciones de servicio y lavaderos de la empresa. Al registrar, el campo es una lista con buscador: mientras la empresa tenga proveedores de ese tipo, solo se puede elegir de la lista (no se escribe cualquier cosa). Un botón importa los nombres que ya aparecen en el historial.
 - **Historial**: filtros, precio por litro, corrección y anulación de registros, descarga en CSV.
 - **Costos**: gasto por vehículo, por tipo y por mes, costo por km, descarga en CSV.
+- **Repuestos**: inventario sencillo con stock mínimo. Las salidas con vehículo entran como gasto de ese vehículo; lo que baja del mínimo aparece en el Dashboard y en el recordatorio diario.
+- **Llantas y batería**: en la ficha de cada vehículo, con km y meses de uso, porcentaje de vida útil y alerta al 85 % y al 100 %. Al instalar con costo se registra el gasto.
+- **Conductor por registro**: cada carga o gasto guarda quién manejaba (por defecto el conductor asignado). Costos muestra una tabla por conductor con consumo y alertas.
+- **Presupuesto mensual** por vehículo y por parqueo, con barra y semáforo en el Dashboard.
+- **Exportación contable**: en Costos, un CSV con fecha, tipo, placa, proveedor, N° de factura, categoría y monto de todos los registros del período.
+- **Ficha pública por QR**: al escanear el QR sin usuario se ve la ficha del vehículo (planes, documentos, últimos mantenimientos, sin costos). Se desactiva en Empresa.
+- **Registro desde la landing**: `/landing/` permite crear una empresa con 30 días de prueba del plan Flota. Se cierra con `REGISTRO_ABIERTO=0`.
+- **País, moneda y zona horaria por empresa**, con los nombres de los dos documentos obligatorios (SOAT e inspección técnica en Bolivia, SOAT y revisión técnica en Perú, etc.). Los textos de la aplicación están en español.
 - **Empresas** (dueño de la plataforma): planes, límites, pagos, vencimiento con días de gracia, recordatorio de pago por WhatsApp y empresa demo con 6 meses de datos.
 
 ## Seguridad

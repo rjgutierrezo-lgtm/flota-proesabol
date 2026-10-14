@@ -8,7 +8,7 @@ export async function onRequestPost({ request, env }) {
   // 1) borrar la demo anterior
   const prev = await env.DB.prepare("SELECT id FROM empresas WHERE slug = ?").bind(SLUG).first();
   if (prev) { const id = prev.id;
-    await env.DB.batch(["eventos", "planes", "vehiculos", "conductores", "sucursales", "fotos", "pagos", "proveedores"].map(t => env.DB.prepare(`DELETE FROM ${t} WHERE empresa_id = ?`).bind(id))
+    await env.DB.batch(["eventos", "planes", "vehiculos", "conductores", "sucursales", "fotos", "pagos", "proveedores", "activos", "repuestos", "movimientos", "recordatorios"].map(t => env.DB.prepare(`DELETE FROM ${t} WHERE empresa_id = ?`).bind(id))
       .concat([env.DB.prepare("DELETE FROM sesiones WHERE usuario_id IN (SELECT id FROM usuarios WHERE empresa_id = ?)").bind(id), env.DB.prepare("DELETE FROM usuarios WHERE empresa_id = ?").bind(id), env.DB.prepare("DELETE FROM empresas WHERE id = ?").bind(id)])); }
   // 2) empresa, parqueos, usuarios y conductores
   const eid = (await env.DB.prepare("INSERT INTO empresas(nombre, slug, plan, telefono_admin) VALUES('Transportes Demo', ?, 'empresa', '')").bind(SLUG).run()).meta.last_row_id;
@@ -62,6 +62,20 @@ export async function onRequestPost({ request, env }) {
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(eid, sid, vid, tipo, fecha, k, l, monto, lleno, prov, det, cat, plan ? pid[plan] : null, ci == null ? null : cid[ci], rend2, alerta, fecha.replace("T", " ").slice(0, 19)));
     st.push(env.DB.prepare("UPDATE vehiculos SET km_actual = ? WHERE id = ?").bind(km, vid));
   }
+  // llantas, baterías, presupuestos y repuestos de ejemplo
+  const vs = (await env.DB.prepare("SELECT id, km_actual FROM vehiculos WHERE empresa_id = ? ORDER BY id").bind(eid).all()).results;
+  for (const v of vs) {
+    const inst = f10(hoyD.getTime() - rnd(60, 400) * dia);
+    for (const pos of ["Delantera izq.", "Delantera der.", "Trasera izq.", "Trasera der."])
+      st.push(env.DB.prepare("INSERT INTO activos(empresa_id, vehiculo_id, tipo, marca, detalle, posicion, fecha_instalacion, km_instalacion, costo, vida_km, vida_meses) VALUES(?,?,?,?,?,?,?,?,?,?,?)")
+        .bind(eid, v.id, "llanta", "Bridgestone", "265/65 R17", pos, inst, Math.max(0, v.km_actual - Math.round(rnd(2000, 30000))), 950, 50000, 36));
+    st.push(env.DB.prepare("INSERT INTO activos(empresa_id, vehiculo_id, tipo, marca, detalle, fecha_instalacion, km_instalacion, costo, vida_km, vida_meses) VALUES(?,?,?,?,?,?,?,?,?,?)")
+      .bind(eid, v.id, "bateria", "Bosch", "12V 75Ah", f10(hoyD.getTime() - rnd(30, 800) * dia), Math.max(0, v.km_actual - Math.round(rnd(1000, 20000))), 780, 0, 24));
+    st.push(env.DB.prepare("UPDATE vehiculos SET presupuesto_mes = ? WHERE id = ?").bind(Math.round(rnd(25, 45)) * 100, v.id));
+  }
+  st.push(env.DB.prepare("UPDATE sucursales SET presupuesto_mes = 12000 WHERE id = ?").bind(p1), env.DB.prepare("UPDATE sucursales SET presupuesto_mes = 9000 WHERE id = ?").bind(p2));
+  for (const [n, c, un, s, m, co] of [["Filtro de aceite Toyota", "FO-110", "unidad", 6, 3, 45], ["Filtro de aire Hilux", "FA-221", "unidad", 1, 2, 120], ["Aceite 15W40", "AC-15W40", "litro", 38, 20, 32], ["Pastillas de freno delanteras", "PF-301", "juego", 0, 1, 260], ["Foco H4", "FH4", "unidad", 9, 4, 25]])
+    st.push(env.DB.prepare("INSERT INTO repuestos(empresa_id, nombre, codigo, unidad, stock, minimo, costo) VALUES(?,?,?,?,?,?,?)").bind(eid, n, c, un, s, m, co));
   for (let i = 0; i < st.length; i += 90) await env.DB.batch(st.slice(i, i + 90));
   return json({ ok: true, empresa: "Transportes Demo", registros: st.length - V.length, usuarios: [{ usuario: "demo.admin", clave: CLAVE, perfil: "Administradora: ve todo (dashboard, costos)" }, { usuario: "demo.chofer", clave: CLAVE, perfil: "Conductor del Parqueo Norte: solo registra y ve sus vehículos" }] });
 }
