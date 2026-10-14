@@ -2,7 +2,7 @@
 import { json, err, txt, hashPass, randomHex, sameStr, validUser, ITER } from "../../lib/db.js";
 export async function onRequestGet({ env }) {
   const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM usuarios WHERE super = 1").first();
-  return json({ ok: true, necesita: c.n === 0 });
+  return json({ ok: true, necesita: c.n === 0, fotos_r2: !!env.FOTOS }); // fotos_r2: si el bucket R2 está conectado
 }
 export async function onRequestPost({ request, env }) {
   const b = await request.json().catch(() => ({}));
