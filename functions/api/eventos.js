@@ -9,6 +9,7 @@ export async function onRequestGet({ request, env }) {
   const q = new URL(request.url).searchParams, sucs = (await misSucursales(env, u)).map(s => s.id); if (!sucs.length) return json({ ok: true, eventos: [], mas: false });
   const w = [`e.empresa_id = ?`, `e.sucursal_id IN (${sucs.map(() => "?").join(",")})`], v = [E(u), ...sucs];
   if (q.get("vehiculo_id")) { w.push("e.vehiculo_id = ?"); v.push(int(q.get("vehiculo_id"))); }
+  if (q.get("sucursal_id") && sucs.includes(int(q.get("sucursal_id")))) { w.push("e.sucursal_id = ?"); v.push(int(q.get("sucursal_id"))); }
   if (TIPOS.includes(q.get("tipo"))) { w.push("e.tipo = ?"); v.push(q.get("tipo")); }
   const desde = txt(q.get("desde"), 10), hasta = txt(q.get("hasta"), 10);
   if (!puede(u, "reportes")) { w.push("e.usuario_id = ?"); v.push(u.id); }

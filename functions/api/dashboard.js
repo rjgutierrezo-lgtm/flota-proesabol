@@ -9,7 +9,14 @@ export async function onRequestGet({ request, env }) {
   const hoy = hoyTZ(u.tz), off = tzSql(u.tz), mes = hoy.slice(0, 7), costos = puede(u, "reportes"), ph = sucs.map(() => "?").join(",");
   const desde = txt(q.get("desde"), 10) || new Date(Date.now() + (u.tz ?? -4) * 3600e3 - 29 * 864e5).toISOString().slice(0, 10), hasta = txt(q.get("hasta"), 10) || hoy;
   const d = inicioDia(desde, u.tz), h = finDia(hasta, u.tz);
-  const hace60 = new Date(Date.now() - 60 * 864e5).toISOString(), hace6m = new Date(Date.now() - 183 * 864e5).toISOString();
+  const hace60 = new Date(Date.now() - 60 * 864e5).toISOString(), hace12m = inicioDia(mes + "-01", u.tz).replace(/^(\d{4})-(\d{2})/, (m0, y, mo) => `${+mo > 12 ? +y : +y - 1}-${String(+mo).padStart(2, "0")}`);
+  const wp = `e.empresa_id = ? AND e.anulado = 0 AND e.sucursal_id IN (${ph}) AND e.fecha >= ? AND e.fecha < ?`, pp = [E(u), ...sucs, d, h];
+  const [prov, topVeh, trabajos, categorias, kmPer] = costos ? await env.DB.batch([
+    env.DB.prepare(`SELECT e.proveedor AS nombre, SUM(e.monto) AS total, COUNT(*) AS n FROM eventos e WHERE ${wp} AND trim(e.proveedor) <> '' GROUP BY e.proveedor ORDER BY total DESC LIMIT 10`).bind(...pp),
+    env.DB.prepare(`SELECT v.placa AS nombre, v.id, SUM(e.monto) AS total, MAX(e.km) - MIN(e.km) AS km FROM eventos e JOIN vehiculos v ON v.id = e.vehiculo_id WHERE ${wp} GROUP BY e.vehiculo_id ORDER BY total DESC LIMIT 10`).bind(...pp),
+    env.DB.prepare(`SELECT COALESCE(p.nombre, NULLIF(e.detalle, ''), 'Correctivo') AS nombre, SUM(e.monto) AS total, COUNT(*) AS n FROM eventos e LEFT JOIN planes p ON p.id = e.plan_id WHERE ${wp} AND e.tipo = 'mantenimiento' GROUP BY 1 ORDER BY total DESC LIMIT 10`).bind(...pp),
+    env.DB.prepare(`SELECT CASE WHEN e.tipo = 'gasto' THEN COALESCE(NULLIF(e.categoria, ''), 'Otro gasto') WHEN e.tipo = 'combustible' THEN 'Combustible' WHEN e.tipo = 'mantenimiento' THEN 'Mantenimiento' WHEN e.tipo = 'lavado' THEN 'Lavado' ELSE e.tipo END AS nombre, SUM(e.monto) AS total, COUNT(*) AS n FROM eventos e WHERE ${wp} AND e.monto > 0 GROUP BY 1 ORDER BY total DESC`).bind(...pp),
+    env.DB.prepare(`SELECT SUM(km) AS km, SUM(litros) AS litros FROM (SELECT MAX(e.km) - MIN(e.km) AS km, SUM(CASE WHEN e.tipo = 'combustible' THEN e.litros ELSE 0 END) AS litros FROM eventos e WHERE ${wp} AND e.km IS NOT NULL GROUP BY e.vehiculo_id)`).bind(...pp)]) : [];
   const [veh, pla, kmr, rea, gas, mesQ, gmes, gveh, pres, rep] = await env.DB.batch([
     env.DB.prepare(`SELECT v.*, s.nombre AS sucursal, c.nombre AS conductor, c.licencia_vence FROM vehiculos v JOIN sucursales s ON s.id = v.sucursal_id LEFT JOIN conductores c ON c.id = v.conductor_id
       WHERE v.empresa_id = ? AND v.estado <> 'baja' AND v.sucursal_id IN (${ph}) ORDER BY v.placa`).bind(E(u), ...sucs),
@@ -21,7 +28,7 @@ export async function onRequestGet({ request, env }) {
     env.DB.prepare(`SELECT e.sucursal_id, e.tipo, SUM(e.monto) AS total, SUM(e.litros) AS litros, COUNT(*) AS n FROM eventos e WHERE e.empresa_id = ? AND e.anulado = 0 AND e.sucursal_id IN (${ph})
       AND e.fecha >= ? AND e.fecha < ? GROUP BY e.sucursal_id, e.tipo`).bind(E(u), ...sucs, d, h),
     env.DB.prepare(`SELECT substr(datetime(e.fecha, ?), 1, 7) AS mes, e.tipo, SUM(e.monto) AS total FROM eventos e WHERE e.empresa_id = ? AND e.anulado = 0 AND e.sucursal_id IN (${ph})
-      AND e.fecha >= ? GROUP BY mes, e.tipo ORDER BY mes`).bind(off, E(u), ...sucs, hace6m),
+      AND e.fecha >= ? GROUP BY mes, e.tipo ORDER BY mes`).bind(off, E(u), ...sucs, hace12m),
     // presupuesto del mes en curso: gasto por parqueo y por vehículo
     env.DB.prepare(`SELECT e.sucursal_id, SUM(e.monto) AS total FROM eventos e WHERE e.empresa_id = ? AND e.anulado = 0 AND e.sucursal_id IN (${ph}) AND substr(datetime(e.fecha, ?), 1, 7) = ? GROUP BY e.sucursal_id`).bind(E(u), ...sucs, off, mes),
     env.DB.prepare(`SELECT e.vehiculo_id, SUM(e.monto) AS total FROM eventos e WHERE e.empresa_id = ? AND e.anulado = 0 AND e.sucursal_id IN (${ph}) AND substr(datetime(e.fecha, ?), 1, 7) = ? GROUP BY e.vehiculo_id`).bind(E(u), ...sucs, off, mes),
@@ -51,6 +58,7 @@ export async function onRequestGet({ request, env }) {
   const presSuc = pres.results.filter(s => s.presupuesto_mes > 0).map(s => ({ sucursal_id: s.id, nombre: s.nombre, presupuesto: s.presupuesto_mes, gastado: gmes.results.find(x => x.sucursal_id === s.id)?.total || 0 }));
   const out = { ok: true, hoy, mes, desde, hasta, costos, planificados, realizados: rea.results, documentos: alertasDoc.sort((a, b) => a.dias - b.dias), parqueos: [...porSuc.values()], meses: mesQ.results,
     presupuestos: { parqueos: presSuc, vehiculos: presVeh.sort((a, b) => b.gastado / b.presupuesto - a.gastado / a.presupuesto) }, repuestos_min: rep.results,
+    graficos: costos ? { proveedores: prov.results, top_vehiculos: topVeh.results, trabajos: trabajos.results, categorias: categorias.results, km: kmPer.results[0]?.km || 0, litros: kmPer.results[0]?.litros || 0 } : null,
     vehiculos: veh.results.map(v => ({ id: v.id, placa: v.placa, marca: v.marca, modelo: v.modelo, sucursal: v.sucursal, km_actual: v.km_actual, conductor: v.conductor, estado: v.estado })) };
   if (!costos) { out.realizados.forEach(x => delete x.monto); out.parqueos.forEach(p => { for (const k of ["combustible", "mantenimiento", "lavado", "gasto", "total"]) delete p[k]; }); out.meses = []; out.presupuestos = { parqueos: [], vehiculos: [] }; }
   return json(out);

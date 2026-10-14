@@ -336,19 +336,53 @@ const linkQR=v=>`${location.origin}/#v=${v.codigo}`;
 function etiquetaQR(v){ imprimir(`<h3>${esc(EMP.nombre)}</h3><div class="c big">${esc(v.placa)}</div><div class="c">${qrSvg(linkQR(v))}</div><div class="c">Escanea para registrar combustible, lavado o kilometraje</div>`); }
 
 // ===================== Dashboard =====================
-const barras=(items,key,lab)=>{ const max=Math.max(1,...items.map(x=>x[key]||0)); return items.map(x=>`<div style="display:flex;align-items:center;gap:8px;margin:4px 0"><span style="min-width:74px;font-size:.85rem">${esc(x[lab])}</span>
-  <div style="flex:1;background:var(--bg);border-radius:6px;height:16px;overflow:hidden"><div style="height:100%;width:${(x[key]||0)/max*100}%;background:var(--accent)"></div></div><span class="num" style="min-width:90px;text-align:right;font-size:.85rem">${money(x[key]||0)}</span></div>`).join("")||'<p class="muted">Sin datos</p>'; };
+// Gráficos SVG propios (sin librerías): paleta categórica validada para daltonismo en claro y oscuro.
+const PAL_L=["#2a78d6","#eb6834","#1baf7a","#eda100","#e87ba4","#008300"], PAL_D=["#3987e5","#d95926","#199e70","#c98500","#d55181","#008300"];
+const pal=i=>(matchMedia("(prefers-color-scheme: dark)").matches?PAL_D:PAL_L)[i%6];
+const fmtK=n=>n>=1e6?fmtN(n/1e6,1)+" M":n>=1e4?fmtN(n/1e3,0)+" k":fmtN(n,0);
+let TIP=null; function tipShow(html,x,y){ if(!TIP){ TIP=document.createElement("div"); TIP.id="tip"; document.body.appendChild(TIP); } TIP.innerHTML=html; TIP.classList.add("show"); const w=TIP.offsetWidth, h=TIP.offsetHeight; TIP.style.left=Math.min(innerWidth-w-8,x+14)+"px"; TIP.style.top=Math.max(8,y-h-14)+"px"; } function tipHide(){ if(TIP) TIP.classList.remove("show"); }
+const mesCorto=m=>{ const [y,mo]=m.split("-"); return ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"][+mo-1]+(mo==="01"?" "+y.slice(2):""); };
+// Línea: {etiquetas:[...], series:[{nombre, valores:[...]}]} → SVG con grilla, marcadores, etiqueta al final y crosshair con tooltip
+function chartLinea(el,{etiquetas,series}){ const W=640,H=240,L=46,R=70,T=16,B=28, n=etiquetas.length; if(!n||!series.some(s=>s.valores.some(v=>v>0))){ el.innerHTML='<p class="vacio">Sin datos en este período</p>'; return; }
+  const max=Math.max(1,...series.flatMap(s=>s.valores)), X=i=>n===1?(L+W-R)/2:L+i*(W-L-R)/(n-1), Y=v=>T+(H-T-B)*(1-v/max);
+  const grid=[0,.5,1].map(f=>`<line class="gl" x1="${L}" x2="${W-R}" y1="${Y(max*f)}" y2="${Y(max*f)}"/><text x="${L-6}" y="${Y(max*f)+4}" text-anchor="end">${fmtK(max*f)}</text>`).join("");
+  const xs=etiquetas.map((e,i)=>(n<=12||i%2===0)?`<text x="${X(i)}" y="${H-8}" text-anchor="middle">${esc(mesCorto(e))}</text>`:"").join("");
+  const paths=series.map((s,k)=>`<path class="ser" stroke="${pal(k)}" d="${s.valores.map((v,i)=>(i?"L":"M")+X(i).toFixed(1)+" "+Y(v).toFixed(1)).join(" ")}"/>${s.valores.map((v,i)=>`<circle class="mk" cx="${X(i)}" cy="${Y(v)}" r="3.5" fill="${pal(k)}"/>`).join("")}
+    <text x="${W-R+8}" y="${Y(s.valores[n-1])+4}" style="fill:var(--ink);font-weight:600">${esc(s.nombre)}</text>`).join("");
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Gasto por mes">${grid}${xs}${paths}<line class="cross" id="cx" y1="${T}" y2="${H-B}"/><rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="transparent" id="hit"/></svg>
+    <div class="leg">${series.map((s,k)=>`<span style="--c:${pal(k)}">${esc(s.nombre)}</span>`).join("")}</div>`;
+  const svg=el.querySelector("svg"), cx=el.querySelector("#cx"), hit=el.querySelector("#hit");
+  hit.onmousemove=ev=>{ const r=svg.getBoundingClientRect(), x=(ev.clientX-r.left)*W/r.width, i=n===1?0:Math.max(0,Math.min(n-1,Math.round((x-L)/((W-L-R)/(n-1))))); cx.setAttribute("x1",X(i)); cx.setAttribute("x2",X(i)); cx.style.opacity=1;
+    tipShow(`<b>${esc(mesCorto(etiquetas[i]))}</b>${series.map((s,k)=>`<br><span style="color:${pal(k)}">●</span> ${esc(s.nombre)}: ${money(s.valores[i])}`).join("")}<br>Total: <b>${money(series.reduce((a,s)=>a+s.valores[i],0))}</b>`,ev.clientX,ev.clientY); };
+  hit.onmouseleave=()=>{ cx.style.opacity=0; tipHide(); }; }
+// Dona: {items:[{nombre,total}]} con máximo 5 categorías + Otros, total al centro y leyenda con valores
+function chartDona(el,items,total){ const top=items.slice(0,5), otros=items.slice(5).reduce((a,x)=>a+x.total,0); if(otros>0) top.push({nombre:"Otros",total:otros});
+  const sum=top.reduce((a,x)=>a+x.total,0); if(!sum){ el.innerHTML='<p class="vacio">Sin datos en este período</p>'; return; }
+  const r=60,c=2*Math.PI*r; let off=0;
+  const arcs=top.map((x,k)=>{ const f=x.total/sum, len=Math.max(0,f*c-2); const s=`<circle cx="75" cy="75" r="${r}" fill="none" stroke="${pal(k)}" stroke-width="22" stroke-dasharray="${len} ${c-len}" stroke-dashoffset="${-off}" transform="rotate(-90 75 75)" data-i="${k}"/>`; off+=f*c; return s; }).join("");
+  el.innerHTML=`<div class="dona"><svg viewBox="0 0 150 150" role="img" aria-label="Gasto por categoría">${arcs}<text x="75" y="71" text-anchor="middle" style="fill:var(--ink);font-size:15px;font-weight:700">${esc(fmtK(total??sum))}</text><text x="75" y="88" text-anchor="middle">${esc(EMP.moneda)} total</text></svg>
+    <div class="lg">${top.map((x,k)=>`<div data-i="${k}"><span><i style="--c:${pal(k)}"></i>${esc(x.nombre)}</span><span class="num">${money(x.total)} <small class="muted">${Math.round(x.total/sum*100)}%</small></span></div>`).join("")}</div></div>`;
+  el.querySelectorAll("circle[data-i]").forEach(ci=>{ const x=top[+ci.dataset.i]; ci.onmousemove=ev=>tipShow(`<b>${esc(x.nombre)}</b><br>${money(x.total)} · ${Math.round(x.total/sum*100)}%`,ev.clientX,ev.clientY); ci.onmouseleave=tipHide; }); }
+// Barras horizontales: items [{nombre,total,...}] en un solo tono, valor en la punta
+function chartBarras(el,items,{color,sub}={}){ if(!items.length){ el.innerHTML='<p class="vacio">Sin datos en este período</p>'; return; } const max=Math.max(1,...items.map(x=>x.total));
+  el.innerHTML=`<div class="hbar">${items.map(x=>`<div class="lb" title="${esc(x.nombre)}">${esc(x.nombre)}</div><div class="bw" data-t="${esc(x.nombre)}: ${money(x.total)}${sub?sub(x):""}"><div class="b" style="width:${Math.max(1,x.total/max*100)}%;background:${color||pal(0)}"></div><span class="n num">${fmtK(x.total)}</span></div>`).join("")}</div>`;
+  el.querySelectorAll(".bw").forEach(b=>{ b.onmousemove=ev=>tipShow(b.dataset.t,ev.clientX,ev.clientY); b.onmouseleave=tipHide; }); }
 const estChip=e=>`<span class="chip ${e==="vencido"?"bad":e==="proximo"?"warn":e==="sin_registro"?"":"ok"}">${e==="vencido"?"Vencido":e==="proximo"?"Próximo":e==="sin_registro"?"Sin registro":"Planificado"}</span>`;
-async function viewPanel(){ const admin=can("reportes"); let par=PRESEL?.panel_suc??"", hor=90;
-  $("main").innerHTML=`<div class="toolbar" style="justify-content:space-between"><h2 style="margin:0">${admin?"Dashboard de la flota":"Mi panel"}</h2>
-    <div class="toolbar" style="margin:0">${SUCS.length>1?`<div><label>Parqueo</label><select id="dp"><option value="">Todos</option>${SUCS.map(s=>`<option value="${s.id}">${esc(s.nombre)}</option>`).join("")}</select></div>`:""}
-    ${admin?`<div><label>Desde</label><input type="date" id="dd" value="${daysAgo(29)}"></div><div><label>Hasta</label><input type="date" id="dh" value="${today()}"></div>`:""}<div><label>Planificados a</label><select id="dz"><option value="30">30 días</option><option value="60">60 días</option><option value="90" selected>90 días</option><option value="365">1 año</option></select></div></div></div>
+const RANGOS={mes:()=>[today().slice(0,8)+"01",today()],ant:()=>{ const d=new Date(); d.setDate(0); const h=new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10); return [h.slice(0,8)+"01",h]; },tri:()=>[daysAgo(89),today()],anio:()=>[today().slice(0,4)+"-01-01",today()],doce:()=>[daysAgo(364),today()]};
+async function viewPanel(){ const admin=can("reportes"); let par=PRESEL?.panel_suc??"", hor=90, rango=ls.get("ag-rango")||"mes";
+  $("main").innerHTML=`<div class="toolbar" style="justify-content:space-between;align-items:center"><h2 style="margin:0">${admin?"Dashboard de la flota":"Mi panel"}</h2>
+    <div class="toolbar" style="margin:0">${SUCS.length>1?`<div><label>Parqueo</label><select id="dp"><option value="">Todos los parqueos</option>${SUCS.map(s=>`<option value="${s.id}">${esc(s.nombre)}</option>`).join("")}</select></div>`:""}
+    <div><label>Planificados a</label><select id="dz"><option value="30">30 días</option><option value="60">60 días</option><option value="90" selected>90 días</option><option value="365">1 año</option></select></div></div></div>
+    ${admin?`<div class="toolbar" style="align-items:center"><div class="chips" id="drg">${[["mes","Este mes"],["ant","Mes anterior"],["tri","3 meses"],["anio","Este año"],["doce","12 meses"],["custom","Personalizado"]].map(([k,t])=>`<button class="sec" data-rg="${k}">${t}</button>`).join("")}</div>
+      <div id="dcus" class="toolbar hidden" style="margin:0"><div><label>Desde</label><input type="date" id="dd"></div><div><label>Hasta</label><input type="date" id="dh"></div></div></div>`:""}
     <div class="toolbar">${can("registrar")?`<button id="preg">➕ Registrar</button><button class="sec" id="pscan">📷 Escanear QR del vehículo</button>`:""}<button class="sec" id="pwa" title="Abre WhatsApp con el resumen de vencidos, próximos y documentos">💬 Resumen por WhatsApp</button></div><div id="dout"><p class="muted">Cargando…</p></div>`;
   if($("dp")) $("dp").value=par;
+  const setRango=k=>{ rango=k; ls.set("ag-rango",k); $("main").querySelectorAll("[data-rg]").forEach(b=>b.className=b.dataset.rg===k?"":"sec"); $("dcus").classList.toggle("hidden",k!=="custom"); if(k!=="custom"){ const [a,b]=RANGOS[k](); $("dd").value=a; $("dh").value=b; } else { if(!$("dd").value){ const [a,b]=RANGOS.mes(); $("dd").value=a; $("dh").value=b; } } };
+  if(admin) setRango(RANGOS[rango]||rango==="custom"?rango:"mes");
   const load=async()=>{ const p=$("dp")?.value||""; hor=+$("dz").value; VEH=(await api("vehiculos")).vehiculos;
     const j=await api(`dashboard?${p?"sucursal_id="+p+"&":""}${admin?`desde=${$("dd").value}&hasta=${$("dh").value}`:""}`); if(j.vacio){ $("dout").innerHTML='<div class="card"><p class="muted">Sin parqueos asignados.</p></div>'; return; }
     const lim=new Date(Date.now()+hor*864e5).toISOString().slice(0,10), plan=j.planificados.filter(x=>x.estado==="vencido"||x.estado==="proximo"||(x.estimada&&x.estimada<=lim));
-    const venc=plan.filter(x=>x.estado==="vencido").length, prox=plan.filter(x=>x.estado==="proximo").length, T=j.parqueos.reduce((a,x)=>({total:a.total+(x.total||0),man:a.man+(x.mantenimiento||0),comb:a.comb+(x.combustible||0),l:a.l+x.litros}),{total:0,man:0,comb:0,l:0});
+    const venc=plan.filter(x=>x.estado==="vencido").length, prox=plan.filter(x=>x.estado==="proximo").length, T=j.parqueos.reduce((a,x)=>({total:a.total+(x.total||0),man:a.man+(x.mantenimiento||0),comb:a.comb+(x.combustible||0),lav:a.lav+(x.lavado||0),otr:a.otr+(x.gasto||0),l:a.l+x.litros}),{total:0,man:0,comb:0,lav:0,otr:0,l:0});
     const tablaPlan=`<div class="card tbl"><h3>🗓️ Mantenimientos planificados <small class="muted">(vencidos y próximos ${hor} días)</small></h3><table><thead><tr><th>Vehículo</th>${SUCS.length>1?"<th>Parqueo</th>":""}<th>Mantenimiento</th><th>Fecha estimada</th><th>Km objetivo</th><th>Estado</th><th></th></tr></thead><tbody>
       ${plan.map(x=>`<tr><td><b>${esc(x.placa)}</b></td>${SUCS.length>1?`<td>${esc(x.sucursal)}</td>`:""}<td>${esc(x.plan)}</td><td>${x.estimada?fechaCorta(x.estimada):"—"}${x.km_dia?`<br><small class="muted">~${x.km_dia} km/día</small>`:""}</td>
         <td>${x.proxKm!=null?fmtKm(x.proxKm):"—"}${x.faltaKm!=null?`<br><small class="muted">${x.faltaKm<=0?"pasado "+fmtKm(-x.faltaKm):"faltan "+fmtKm(x.faltaKm)}</small>`:""}</td><td>${estChip(x.estado)}</td>
@@ -359,15 +393,24 @@ async function viewPanel(){ const admin=can("reportes"); let par=PRESEL?.panel_s
     const barPres=x=>{ const p=x.gastado/x.presupuesto*100, col=p>=100?"var(--bad)":p>=80?"var(--warn)":"var(--accent)"; return `<div style="margin:6px 0"><div style="display:flex;justify-content:space-between;gap:8px;font-size:.9rem"><span><b>${esc(x.placa||x.nombre)}</b>${x.placa&&SUCS.length>1?` <small class="muted">${esc(x.sucursal)}</small>`:x.placa?"":' <small class="muted">parqueo</small>'}</span><span class="num">${money(x.gastado)} / ${money(x.presupuesto)} · <b style="color:${col}">${Math.round(p)}%</b></span></div><div style="background:var(--bg);border-radius:6px;height:10px;overflow:hidden"><div style="height:100%;width:${Math.min(100,p)}%;background:${col}"></div></div></div>`; };
     const PR=j.presupuestos||{parqueos:[],vehiculos:[]}, presCard=(PR.parqueos.length||PR.vehiculos.length)?`<div class="card" style="margin-top:12px"><h3>💸 Presupuesto de ${esc(j.mes)} <small class="muted">(gastado / presupuesto)</small></h3>${PR.parqueos.map(barPres).join("")}${PR.vehiculos.map(barPres).join("")}</div>`:"";
     const repCard=j.repuestos_min?.length?`<div class="card" style="margin-top:12px"><h3>📦 Repuestos bajo mínimo</h3>${j.repuestos_min.map(r=>`<div><span class="chip ${r.stock<=0?"bad":"warn"}">${fmtQ(r.stock)} ${esc(r.unidad)}</span> <b>${esc(r.nombre)}</b> <small class="muted">mínimo ${fmtQ(r.minimo)}</small></div>`).join("")}${can("mantenimiento")?`<button class="sec" id="prep" style="margin-top:8px">Ver repuestos</button>`:""}</div>`:"";
-    if(admin){
-      const meses=[...new Set(j.meses.map(m=>m.mes))].map(m=>({mes:m,total:j.meses.filter(x=>x.mes===m).reduce((a,x)=>a+x.total,0)}));
-      $("dout").innerHTML=`<div class="kpis"><div class="card kpi"><div class="v">${j.vehiculos.length}</div><div class="l">Vehículos${SUCS.length>1&&!$("dp")?.value?` en ${j.parqueos.length} parqueos`:""}</div></div>
-        <div class="card kpi"><div class="v" style="color:${venc?"var(--bad)":"inherit"}">${venc}</div><div class="l">Mantenimientos vencidos</div></div><div class="card kpi"><div class="v" style="color:${prox?"var(--warn)":"inherit"}">${prox}</div><div class="l">Próximos</div></div>
-        <div class="card kpi"><div class="v">${j.realizados.length}</div><div class="l">Realizados en el período</div></div><div class="card kpi"><div class="v num">${money(T.total)}</div><div class="l">Gasto del período (mant. ${money(T.man)})</div></div></div>
-        ${tablaPlan}<div style="margin-top:12px">${tablaRea}</div>${docs}${presCard}${repCard}
-        <div class="row" style="align-items:flex-start;margin-top:12px">${j.parqueos.length>1?`<div class="card tbl"><h3>Por parqueo</h3><table><thead><tr><th>Parqueo</th><th class="n">Vehículos</th><th class="n">Vencidos</th><th class="n">Próximos</th><th class="n">Combustible</th><th class="n">Mantenim.</th><th class="n">Total</th></tr></thead><tbody>
-          ${j.parqueos.map(x=>`<tr class="click" data-ps="${x.sucursal_id}"><td><b>${esc(x.nombre)}</b></td><td class="n">${x.vehiculos}</td><td class="n" style="color:${x.vencidos?"var(--bad)":"inherit"}">${x.vencidos}</td><td class="n">${x.proximos}</td><td class="n">${money(x.combustible)}</td><td class="n">${money(x.mantenimiento)}</td><td class="n"><b>${money(x.total)}</b></td></tr>`).join("")}</tbody></table></div>`:""}
-          <div class="card"><h3>Gasto por mes</h3>${barras(meses,"total","mes")}</div>${j.parqueos.length>1?"":`<div class="card"><h3>Gasto del período por tipo</h3>${barras([{t:"⛽ Combustible",v:T.comb},{t:"🔧 Mantenim.",v:T.man},{t:"🧽 Lavados",v:j.parqueos.reduce((a,x)=>a+(x.lavado||0),0)},{t:"🧾 Otros",v:j.parqueos.reduce((a,x)=>a+(x.gasto||0),0)}],"v","t")}</div>`}</div>`;
+    if(admin){ const G=j.graficos||{}, per=`${fechaCorta(j.desde)} – ${fechaCorta(j.hasta)}`, nv=j.vehiculos.length;
+      $("dout").innerHTML=`<div class="kpis">
+        <div class="card kpi hero"><div class="v num">${money(T.total)}</div><div class="l">Gasto total · ${per}</div></div>
+        <div class="card kpi"><div class="v num">${G.km>0?money(T.total/G.km):"—"}</div><div class="l">Costo por km · ${fmtKm(G.km||0)} recorridos</div></div>
+        <div class="card kpi"><div class="v num">${nv?money(T.total/nv):"—"}</div><div class="l">Promedio por vehículo (${nv})</div></div>
+        <div class="card kpi"><div class="v" style="color:${venc?"var(--bad)":"inherit"}">${venc}</div><div class="l">Mantenimientos vencidos</div></div>
+        <div class="card kpi"><div class="v" style="color:${prox?"var(--warn)":"inherit"}">${prox}</div><div class="l">Próximos</div></div>
+        <div class="card kpi"><div class="v num">${fmtN(T.l,0)} L</div><div class="l">Combustible · ${money(T.comb)}</div></div></div>
+        ${j.parqueos.length>1?`<div class="pgrid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:12px">${j.parqueos.map((x,k)=>`<div class="card ptile ${$("dp")?.value==x.sucursal_id?"on":""}" data-ps="${x.sucursal_id}" style="border-top-color:${pal(k)}"><b>${esc(x.nombre)}</b><div class="v num">${money(x.total)}</div><small>${x.vehiculos} vehículos · ${x.vehiculos?money(x.total/x.vehiculos):"—"} c/u</small><small>Mantenimiento ${money(x.mantenimiento)}</small>${x.vencidos?`<span class="chip bad" style="margin-top:4px">${x.vencidos} vencido${x.vencidos>1?"s":""}</span>`:x.proximos?`<span class="chip warn" style="margin-top:4px">${x.proximos} próximo${x.proximos>1?"s":""}</span>`:'<span class="chip ok" style="margin-top:4px">Al día</span>'}</div>`).join("")}</div>`:""}
+        <div class="grid2"><div class="card chart"><h3>📈 Gasto por mes <small class="muted">(últimos 12 meses)</small></h3><div id="gLinea"></div></div><div class="card chart"><h3>🧾 ¿En qué se gasta? <small class="muted">(${per})</small></h3><div id="gDona"></div></div></div>
+        <div class="grid3"><div class="card chart"><h3>🏪 Por proveedor</h3><div id="gProv"></div></div><div class="card chart"><h3>🚚 Vehículos que más gastan</h3><div id="gVeh"></div></div><div class="card chart"><h3>🔧 Trabajos de mantenimiento</h3><div id="gTrab"></div></div></div>
+        ${tablaPlan}<div style="margin-top:12px">${tablaRea}</div>${docs}${presCard}${repCard}`;
+      const meses=[...new Set(j.meses.map(m=>m.mes))].sort(), serie=f=>meses.map(m=>j.meses.filter(x=>x.mes===m&&f(x.tipo)).reduce((a,x)=>a+x.total,0));
+      chartLinea($("gLinea"),{etiquetas:meses,series:[{nombre:"Combustible",valores:serie(t=>t==="combustible")},{nombre:"Mantenimiento",valores:serie(t=>t==="mantenimiento")},{nombre:"Otros",valores:serie(t=>t!=="combustible"&&t!=="mantenimiento")}]});
+      chartDona($("gDona"),G.categorias||[],T.total);
+      chartBarras($("gProv"),G.proveedores||[],{color:pal(0),sub:x=>` · ${x.n} registro${x.n>1?"s":""}`});
+      chartBarras($("gVeh"),G.top_vehiculos||[],{color:pal(2),sub:x=>x.km>0?` · ${fmtKm(x.km)} · ${money(x.total/x.km)}/km`:""});
+      chartBarras($("gTrab"),G.trabajos||[],{color:pal(1),sub:x=>` · ${x.n} vez${x.n>1?"es":""}`});
     } else {
       $("dout").innerHTML=`<div class="pgrid" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr));margin-bottom:12px">${j.vehiculos.map(v=>{ const ps=j.planificados.filter(x=>x.vehiculo_id===v.id&&x.estado!=="ok"&&x.estado!=="sin_registro");
         return `<div class="card" style="padding:12px"><b style="font-size:1.2rem">${esc(v.placa)}</b> <span class="chip ${ps.some(x=>x.estado==="vencido")?"bad":ps.length?"warn":"ok"}">${ps.some(x=>x.estado==="vencido")?"Mantenimiento vencido":ps.length?"Mantenimiento próximo":"Al día"}</span>
@@ -377,15 +420,19 @@ async function viewPanel(){ const admin=can("reportes"); let par=PRESEL?.panel_s
     const prep=$("prep"); if(prep) prep.onclick=()=>go("repuestos");
     $("dout").querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{ const [vi,pi]=b.dataset.r.split(":").map(Number); PRESEL={vehiculo_id:vi,tipo:"mantenimiento",plan_id:pi}; go("registrar"); });
     $("dout").querySelectorAll("[data-rv]").forEach(b=>b.onclick=()=>{ PRESEL={vehiculo_id:+b.dataset.rv}; go("registrar"); });
-    $("dout").querySelectorAll("[data-ps]").forEach(tr=>tr.onclick=()=>{ if($("dp")){ $("dp").value=tr.dataset.ps; load(); } });
+    $("dout").querySelectorAll("[data-ps]").forEach(tr=>tr.onclick=()=>{ if($("dp")){ $("dp").value=$("dp").value==tr.dataset.ps?"":tr.dataset.ps; load(); } });
     const pwa=$("pwa"); if(pwa) pwa.onclick=()=>{ const Ls=[`*${EMP.nombre}* · Resumen de flota al ${fechaCorta(j.hoy)}`], ve=plan.filter(x=>x.estado==="vencido"), pr=plan.filter(x=>x.estado!=="vencido");
       const li=x=>`• ${x.placa}: ${x.plan}${x.faltaKm!=null?` (${x.faltaKm<=0?"pasado "+fmtKm(-x.faltaKm):"faltan "+fmtKm(x.faltaKm)})`:""}${x.estimada?` · ${fechaCorta(x.estimada)}`:""}`;
       if(ve.length) Ls.push("",`⛔ *Mantenimientos vencidos (${ve.length})*`,...ve.map(li));
       if(pr.length) Ls.push("",`🔧 *Próximos ${hor} días (${pr.length})*`,...pr.slice(0,15).map(li),...(pr.length>15?[`… y ${pr.length-15} más`]:[]));
       if(j.documentos.length) Ls.push("",`📄 *Documentos (${j.documentos.length})*`,...j.documentos.map(x=>`• ${x.placa}: ${x.doc} ${x.estado==="vencido"?`vencido hace ${-x.dias} días`:`vence en ${x.dias} días`} (${fechaCorta(x.fecha)})`));
+      const sup=[...PR.parqueos,...PR.vehiculos].filter(x=>x.gastado>x.presupuesto); if(sup.length) Ls.push("",`💸 *Presupuesto superado (${sup.length})*`,...sup.map(x=>`• ${x.placa||x.nombre}: ${money(x.gastado)} de ${money(x.presupuesto)}`));
+      if(j.repuestos_min?.length) Ls.push("",`📦 *Repuestos bajo mínimo (${j.repuestos_min.length})*`,...j.repuestos_min.map(r=>`• ${r.nombre}: ${fmtQ(r.stock)} ${r.unidad} (mínimo ${fmtQ(r.minimo)})`));
+      if(admin) Ls.push("",`💰 *Gasto ${fechaCorta(j.desde)} – ${fechaCorta(j.hasta)}*: ${money(T.total)} (combustible ${money(T.comb)}, mantenimiento ${money(T.man)})`);
       if(Ls.length===1) Ls.push("","✅ Sin mantenimientos ni documentos pendientes.");
       const t=(EMP.whatsapp||"").replace(/\D/g,""); open(`https://wa.me/${t.length===8?"591"+t:t}?text=${encodeURIComponent(Ls.join("\n"))}`,"_blank","noopener"); }; };
-  ["#dp","#dd","#dh","#dz"].forEach(s=>{ const e=$("main").querySelector(s); if(e) e.onchange=()=>load().catch(x=>toast(x.message)); });
+  ["#dp","#dd","#dh","#dz"].forEach(s=>{ const e=$("main").querySelector(s); if(e) e.onchange=()=>{ if(s==="#dd"||s==="#dh") setRango("custom"); load().catch(x=>toast(x.message)); }; });
+  $("main").querySelectorAll("[data-rg]").forEach(b=>b.onclick=()=>{ setRango(b.dataset.rg); if(b.dataset.rg!=="custom") load().catch(x=>toast(x.message)); });
   if($("preg")) $("preg").onclick=()=>go("registrar"); if($("pscan")) $("pscan").onclick=()=>escanearVeh(); PRESEL=null;
   await load(); }
 function escanearVeh(){ scan({titulo:"Escanear QR del vehículo",onCode:c=>{ const m=String(c).match(/#v=([a-f0-9]+)/i)||[null,c]; const v=VEH.find(x=>x.codigo===m[1].toLowerCase());
@@ -442,16 +489,18 @@ async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.est
 // ===================== Vehículos =====================
 async function viewVehiculos(){ await cargarVeh(); const P=USER.plan||{};
   $("main").innerHTML=`<h2>Vehículos</h2><div class="toolbar"><div class="grow"><label>Buscar</label><input id="vq" placeholder="Placa, marca o conductor"></div>
+    ${SUCS.length>1?`<div><label>Parqueo</label><select id="vsf"><option value="">Todos</option>${SUCS.map(s=>`<option value="${s.id}">${esc(s.nombre)}</option>`).join("")}</select></div>`:""}
+    <div><label>Estado</label><select id="vef"><option value="">Todos</option><option value="alerta">Con alertas</option><option value="ok">Al día</option><option value="taller">En taller</option></select></div>
     <label class="check" style="margin-bottom:8px"><input type="checkbox" id="vb"> Ver dados de baja</label>${can("vehiculos")?`<button id="vnew">+ Nuevo vehículo</button>`:""}</div>
     ${P.vehiculos!=null?`<p class="muted">Plan ${esc(P.nombre)}: ${VEH.filter(v=>v.estado!=="baja").length} de ${P.vehiculos} vehículos.</p>`:""}<div class="pgrid" id="vgrid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))"></div>`;
-  const draw=()=>{ const q=$("vq").value.toLowerCase(), b=$("vb").checked;
-    $("vgrid").innerHTML=VEH.filter(v=>(b||v.estado!=="baja")&&(!q||(v.placa+" "+v.marca+" "+v.modelo+" "+(v.conductor||"")).toLowerCase().includes(q))).map(v=>{ const n=nivelVeh(v);
+  const draw=()=>{ const q=$("vq").value.toLowerCase(), b=$("vb").checked, sp=+($("vsf")?.value||0), ef=$("vef").value;
+    $("vgrid").innerHTML=VEH.filter(v=>(b||v.estado!=="baja")&&(!sp||v.sucursal_id===sp)&&(!ef||(ef==="alerta"?v.alertas.length>0:ef==="ok"?!v.alertas.length&&v.estado==="activo":v.estado===ef))&&(!q||(v.placa+" "+v.marca+" "+v.modelo+" "+(v.conductor||"")).toLowerCase().includes(q))).map(v=>{ const n=nivelVeh(v);
       return `<div class="card click" data-v="${v.id}" style="cursor:pointer;padding:12px"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:1.25rem;letter-spacing:1px">${esc(v.placa)}</b>
         <span class="chip ${v.estado==="baja"?"":v.estado==="taller"?"warn":n}">${v.estado==="baja"?"Baja":v.estado==="taller"?"En taller":n==="ok"?"Al día":v.alertas.length+" alerta"+(v.alertas.length>1?"s":"")}</span></div>
         <div class="muted">${esc([v.marca,v.modelo,v.anio].filter(Boolean).join(" "))}${SUCS.length>1?` · ${esc(v.sucursal)}`:""}</div><div>${fmtKm(v.km_actual)}${v.rendimiento_ult?` · ${fmtN(v.rendimiento_ult)} km/l`:""}${v.costo_km_30d?` · ${money(v.costo_km_30d)}/km`:""}</div>
         <small class="muted">${v.conductor?"👤 "+esc(v.conductor):"Sin conductor asignado"}</small></div>`; }).join("")||'<p class="muted">Sin vehículos.</p>';
     $("vgrid").querySelectorAll("[data-v]").forEach(x=>x.onclick=()=>vehiculoDetalle(+x.dataset.v)); };
-  $("vq").oninput=draw; $("vb").onchange=draw; draw(); if($("vnew")) $("vnew").onclick=()=>vehiculoForm(null); }
+  $("vq").oninput=draw; $("vb").onchange=draw; $("vef").onchange=draw; if($("vsf")) $("vsf").onchange=draw; draw(); if($("vnew")) $("vnew").onclick=()=>vehiculoForm(null); }
 function vehiculoDetalle(id){ const v=VEH.find(x=>x.id===id); if(!v) return;
   const doc=(n,f,d)=>`<tr><td>${n}</td><td>${fechaCorta(f)}</td><td>${d?`<span class="chip ${d.estado==="ok"?"ok":d.estado==="proximo"?"warn":"bad"}">${d.estado==="vencido"?"Vencido":d.estado==="proximo"?`${d.dias} días`:"Vigente"}</span>`:'<span class="muted">Sin fecha</span>'}</td></tr>`;
   dialog(`<div style="display:flex;gap:12px;align-items:center">${v.foto?`<img data-k="${esc(v.foto)}" alt="" style="width:90px;height:68px;object-fit:cover;border-radius:8px">`:""}<div><h3 style="margin:0">${esc(v.placa)}</h3>
@@ -501,23 +550,32 @@ function planForm(v,p){ dialog(`<h3>${p?"Editar plan":"Nuevo plan"} · ${esc(v.p
     catch(e){ B.querySelector("#pe").textContent=e.message; } }; }); }
 
 // ===================== Mantenimiento (toda la flota) =====================
-async function viewMantenimiento(){ await cargarVeh(); const ord={vencido:0,proximo:1,sin_registro:2,ok:3};
-  const filas=VEH.filter(v=>v.estado!=="baja").flatMap(v=>v.planes.map(p=>({v,p}))).sort((a,b)=>ord[a.p.estado]-ord[b.p.estado]||(a.p.faltaKm??1e9)-(b.p.faltaKm??1e9));
+async function viewMantenimiento(){ await cargarVeh(); const ord={vencido:0,proximo:1,sin_registro:2,ok:3}; const pre=PRESEL||{}; PRESEL=null;
+  const todas=VEH.filter(v=>v.estado!=="baja").flatMap(v=>v.planes.map(p=>({v,p}))).sort((a,b)=>ord[a.p.estado]-ord[b.p.estado]||(a.p.faltaKm??1e9)-(b.p.faltaKm??1e9));
   $("main").innerHTML=`<h2>Mantenimiento preventivo</h2><p class="muted">Todos los planes de la flota, primero los vencidos. Los planes se configuran en cada vehículo.</p>
-    <div class="card tbl"><table><thead><tr><th>Vehículo</th><th>Plan</th><th>Km actual</th><th>Próximo</th><th>Estado</th><th></th></tr></thead><tbody>
-    ${filas.map(({v,p})=>`<tr><td><b>${esc(v.placa)}</b></td><td>${esc(p.nombre)}</td><td>${fmtKm(v.km_actual)}</td><td><small>${p.proxKm!=null?fmtKm(p.proxKm):""}${p.proxKm!=null&&p.proxFecha?"<br>":""}${p.proxFecha?fechaCorta(p.proxFecha):""}</small></td>
+    <div class="toolbar">${SUCS.length>1?`<div><label>Parqueo</label><select id="mp"><option value="">Todos</option>${SUCS.map(s=>`<option value="${s.id}" ${s.id===pre.sucursal_id?"selected":""}>${esc(s.nombre)}</option>`).join("")}</select></div>`:""}
+      <div><label>Estado</label><select id="me"><option value="">Todos</option><option value="vencido">Vencidos</option><option value="proximo">Próximos</option><option value="pend">Vencidos y próximos</option><option value="ok">Al día</option></select></div>
+      <div><label>Plan</label><select id="mpl"><option value="">Todos</option>${[...new Set(todas.map(x=>x.p.nombre))].sort().map(n=>`<option>${esc(n)}</option>`).join("")}</select></div>
+      <div class="grow"><label>Buscar</label><input id="mq" placeholder="Placa, marca o conductor"></div></div>
+    <div id="mres" class="muted" style="margin:-4px 0 8px"></div><div class="card tbl"><table><thead><tr><th>Vehículo</th>${SUCS.length>1?"<th>Parqueo</th>":""}<th>Plan</th><th>Km actual</th><th>Próximo</th><th>Estado</th><th></th></tr></thead><tbody id="mrows"></tbody></table></div>`;
+  const pintar=()=>{ const sp=+($("mp")?.value||0), es=$("me").value, pl=$("mpl").value, q=$("mq").value.toLowerCase();
+    const filas=todas.filter(({v,p})=>(!sp||v.sucursal_id===sp)&&(!es||(es==="pend"?(p.estado==="vencido"||p.estado==="proximo"):p.estado===es))&&(!pl||p.nombre===pl)&&(!q||(v.placa+" "+v.marca+" "+v.modelo+" "+(v.conductor||"")).toLowerCase().includes(q)));
+    const nv=filas.filter(x=>x.p.estado==="vencido").length, np=filas.filter(x=>x.p.estado==="proximo").length;
+    $("mres").innerHTML=`${filas.length} plan${filas.length===1?"":"es"} de ${new Set(filas.map(x=>x.v.id)).size} vehículo${new Set(filas.map(x=>x.v.id)).size===1?"":"s"}${nv?` · <span class="chip bad">${nv} vencido${nv>1?"s":""}</span>`:""}${np?` · <span class="chip warn">${np} próximo${np>1?"s":""}</span>`:""}`;
+    $("mrows").innerHTML=filas.map(({v,p})=>`<tr><td><b>${esc(v.placa)}</b><br><small class="muted">${esc([v.marca,v.modelo].filter(Boolean).join(" "))}</small></td>${SUCS.length>1?`<td>${esc(v.sucursal)}</td>`:""}<td>${esc(p.nombre)}</td><td>${fmtKm(v.km_actual)}</td><td><small>${p.proxKm!=null?fmtKm(p.proxKm):""}${p.proxKm!=null&&p.proxFecha?"<br>":""}${p.proxFecha?fechaCorta(p.proxFecha):""}</small></td>
       <td><span class="chip ${p.estado==="vencido"?"bad":p.estado==="proximo"?"warn":"ok"}">${p.estado==="vencido"?"Vencido":p.estado==="proximo"?"Próximo":"Al día"}</span><br><small class="muted">${p.faltaKm!=null?(p.faltaKm<=0?`pasado ${fmtKm(-p.faltaKm)}`:`faltan ${fmtKm(p.faltaKm)}`):""}${p.faltaDias!=null?` · ${p.faltaDias<=0?`hace ${-p.faltaDias} d`:`${p.faltaDias} d`}`:""}</small></td>
-      <td>${can("mantenimiento")?`<button class="sec" data-r="${v.id}:${p.id}">Registrar</button>`:""}</td></tr>`).join("")||'<tr><td colspan="6" class="muted">Sin planes de mantenimiento.</td></tr>'}</tbody></table></div>`;
-  $("main").querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{ const [vi,pi]=b.dataset.r.split(":").map(Number); PRESEL={vehiculo_id:vi,tipo:"mantenimiento",plan_id:pi}; go("registrar"); }); }
+      <td>${can("mantenimiento")?`<button class="sec" data-r="${v.id}:${p.id}">Registrar</button>`:""}</td></tr>`).join("")||`<tr><td colspan="7" class="muted">Ningún plan coincide con el filtro.</td></tr>`;
+    $("mrows").querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{ const [vi,pi]=b.dataset.r.split(":").map(Number); PRESEL={vehiculo_id:vi,tipo:"mantenimiento",plan_id:pi}; go("registrar"); }); };
+  ["#mp","#me","#mpl"].forEach(s=>{ const e=$("main").querySelector(s); if(e) e.onchange=pintar; }); $("mq").oninput=pintar; pintar(); }
 
 // ===================== Historial =====================
 async function viewHistorial(){ await cargarVeh(); await cargarProv(); await cargarCond(); const pre=PRESEL||{}; PRESEL=null; const rep=can("reportes");
-  $("main").innerHTML=`<h2>Historial</h2>${rep?"":'<p class="muted">Ves los registros que hiciste tú. Puedes corregirlos hasta 24 horas después.</p>'}<div class="toolbar"><div><label>Vehículo</label><select id="hv"><option value="">Todos</option>${VEH.map(v=>`<option value="${v.id}" ${v.id===pre.vehiculo_id?"selected":""}>${esc(v.placa)}</option>`).join("")}</select></div>
+  $("main").innerHTML=`<h2>Historial</h2>${rep?"":'<p class="muted">Ves los registros que hiciste tú. Puedes corregirlos hasta 24 horas después.</p>'}<div class="toolbar">${SUCS.length>1?`<div><label>Parqueo</label><select id="hs"><option value="">Todos</option>${SUCS.map(s=>`<option value="${s.id}">${esc(s.nombre)}</option>`).join("")}</select></div>`:""}<div><label>Vehículo</label><select id="hv"><option value="">Todos</option>${VEH.map(v=>`<option value="${v.id}" ${v.id===pre.vehiculo_id?"selected":""}>${esc(v.placa)}</option>`).join("")}</select></div>
     <div><label>Tipo</label><select id="ht"><option value="">Todos</option>${Object.entries(TIPOS_EV).map(([k,[i,t]])=>`<option value="${k}">${i} ${t}</option>`).join("")}</select></div>
     <div><label>Desde</label><input type="date" id="hd" value="${daysAgo(30)}"></div><div><label>Hasta</label><input type="date" id="hh" value="${today()}"></div><button class="sec" id="hgo">Ver</button><button class="sec" id="hcsv">⬇️ CSV</button></div>
     <div class="card tbl"><table><thead><tr><th>Fecha</th><th>Vehículo</th><th>Tipo</th><th>Detalle</th><th class="n">Km</th><th class="n">Monto</th></tr></thead><tbody id="hrows"></tbody></table><div id="hmas" style="text-align:center;margin-top:10px"></div></div>`;
   let EV=[], pag=0;
-  const filtro=()=>`vehiculo_id=${$("hv").value}&tipo=${$("ht").value}&desde=${$("hd").value}&hasta=${$("hh").value}`;
+  const filtro=()=>`sucursal_id=${$("hs")?.value||""}&vehiculo_id=${$("hv").value}&tipo=${$("ht").value}&desde=${$("hd").value}&hasta=${$("hh").value}`;
   const fila=e=>`<tr class="click" data-id="${e.id}" style="${e.anulado?"opacity:.5;text-decoration:line-through":""}"><td>${fechaHora(e.fecha)}</td><td><b>${esc(e.placa)}</b></td><td>${TIPOS_EV[e.tipo][0]} ${TIPOS_EV[e.tipo][1]}</td>
       <td><small>${e.tipo==="combustible"?`${fmtN(e.litros)} L${e.monto&&e.litros?` · ${fmtN(e.monto/e.litros)}/L`:""}${e.rendimiento?` · <b>${fmtN(e.rendimiento)} km/l</b>`:""}`:esc(e.plan||e.categoria||e.detalle||"")}${e.proveedor?` · ${esc(e.proveedor)}`:""}</small>${e.alerta?`<br><span class="chip warn">${esc(e.alerta)}</span>`:""}</td>
       <td class="n">${e.km!=null?fmtQ(Math.round(e.km)):""}</td><td class="n">${e.monto?money(e.monto):""}</td></tr>`;
@@ -548,7 +606,7 @@ async function viewHistorial(){ await cargarVeh(); await cargarProv(); await car
       B.querySelector("#eok").onclick=async()=>{ const pv=CB?CB.get():{proveedor:""}; if(pv.error) return B.querySelector("#ee").textContent=pv.error;
         try{ await api("eventos",{body:{id:e.id,editar:true,km:val(B,"#ek").replace(",","."),litros:val(B,"#el").replace(",","."),monto:val(B,"#em").replace(",","."),lleno:B.querySelector("#ell")?B.querySelector("#ell").checked:true,fecha:val(B,"#ef"),proveedor:pv.proveedor,proveedor_id:pv.proveedor_id||null,categoria:val(B,"#ec"),detalle:val(B,"#ed"),factura:val(B,"#efa"),conductor_id:val(B,"#eco")}});
         closeDlg(); toast("Registro corregido"); load(); }catch(x){ B.querySelector("#ee").textContent=x.message; } }; }); };
-  $("hgo").onclick=()=>load().catch(e=>toast(e.message)); ["#hv","#ht"].forEach(s=>$("main").querySelector(s).onchange=$("hgo").onclick);
+  $("hgo").onclick=()=>load().catch(e=>toast(e.message)); ["#hs","#hv","#ht"].forEach(s=>{ const e=$("main").querySelector(s); if(e) e.onchange=$("hgo").onclick; });
   $("hcsv").onclick=async()=>{ try{ const j=await api(`eventos?${filtro()}&csv=1`); const h=["Fecha","Placa","Tipo","Km","Litros","Precio/L","km/l","Monto","Plan","Categoría","Proveedor","Detalle","Conductor","Registró","Alerta","Anulado"];
       const c=s=>'"'+String(s??"").replace(/"/g,'""')+'"'; const csv=[h.join(";"),...j.eventos.map(e=>[fechaHora(e.fecha),e.placa,TIPOS_EV[e.tipo][1],e.km!=null?Math.round(e.km):"",e.litros||"",e.litros&&e.monto?(e.monto/e.litros).toFixed(2):"",e.rendimiento||"",e.monto||"",e.plan||"",e.categoria||"",e.proveedor||"",e.detalle||"",e.conductor||"",e.usuario||"",e.alerta||"",e.anulado?"Sí":""].map(c).join(";"))].join("\n");
       descargar(csv,`historial_${$("hd").value}_${$("hh").value}.csv`); if(j.mas) toast("Se descargaron los primeros 5000 registros. Acorta el rango de fechas para ver el resto."); }catch(e){ toast(e.message); } };

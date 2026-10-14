@@ -3,218 +3,269 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>FlotaControl · Control de flota para tu empresa</title>
-<meta name="description" content="Mantenimientos a tiempo, combustible bajo control y costo por kilómetro de cada vehículo. Funciona en el celular del conductor, incluso sin señal. Planes desde Bs 99 al mes.">
-<meta name="theme-color" content="#0B2A6F"><meta name="color-scheme" content="light">
+<title>FlotaControl · Tu flota bajo control desde el celular</title>
+<meta name="description" content="Mantenimientos a tiempo, combustible bajo control y costo por kilómetro de cada vehículo. Tus conductores registran desde el celular, con o sin señal. 30 días gratis.">
+<meta name="theme-color" content="#061A45"><meta name="color-scheme" content="light">
 <link rel="icon" href="/icon.svg" type="image/svg+xml"><link rel="icon" href="/favicon.png" sizes="32x32"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<meta property="og:type" content="website"><meta property="og:title" content="FlotaControl · Control de flota para tu empresa">
-<meta property="og:description" content="Mantenimientos a tiempo, combustible bajo control y costo por kilómetro. Funciona en el celular del conductor, incluso sin señal.">
+<meta property="og:type" content="website"><meta property="og:title" content="FlotaControl · Tu flota bajo control desde el celular">
+<meta property="og:description" content="Que ningún vehículo se te pare por un mantenimiento olvidado. Combustible, costos y documentos de toda la flota en un solo lugar. 30 días gratis.">
 <meta property="og:image" content="https://flota-8r3.pages.dev/tarjeta.png"><meta property="og:url" content="https://flota-8r3.pages.dev/landing/">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@700&display=swap" rel="stylesheet">
 <style>
-:root{--navy:#0B2A6F;--navy2:#061A45;--blue:#1D4ED8;--blue2:#2563EB;--sky:#A9C0FF;--orange:#FF8A00;--ink:#14213D;--muted:#5B6577;--line:#DDE2E8;--bg:#F3F5F7;--card:#fff;--ok:#1B7F4C;--ok-soft:#DDF3E6;--warn:#A15C00;--warn-soft:#FBEBD0;--bad:#B42318;--bad-soft:#FBE0DD}
+:root{--navy:#0B2A6F;--navy2:#061A45;--ink2:#04122F;--blue:#1D4ED8;--blue2:#2563EB;--sky:#A9C0FF;--orange:#FF8A00;--orange2:#FFB357;--ink:#14213D;--muted:#5B6577;--line:#DDE2E8;--bg:#F3F5F7;--card:#fff;--ok:#1B7F4C;--bad:#B42318;--wa:#25D366}
 *{box-sizing:border-box}html{scroll-behavior:smooth}
-body{margin:0;font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5;font-size:16px}
+body{margin:0;font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5;font-size:16px;overflow-x:hidden}
 a{color:inherit}img{max-width:100%}
-.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
-h1,h2,h3{line-height:1.15;margin:0 0 12px}h1{font-size:clamp(2rem,5.5vw,3.4rem);font-weight:700}h2{font-size:clamp(1.5rem,3.6vw,2.2rem)}h3{font-size:1.15rem}
-p{margin:0 0 14px}.muted{color:var(--muted)}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:600;border-radius:10px;padding:13px 22px;text-decoration:none;border:1px solid transparent;cursor:pointer;font-size:1rem;transition:transform .12s ease,box-shadow .12s ease}
-.btn:hover{transform:translateY(-1px)}.btn.wa{background:#25D366;color:#06301A}.btn.pri{background:var(--orange);color:#1F1300}.btn.sec{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.35)}.btn.light{background:var(--card);color:var(--ink);border-color:var(--line)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+h1,h2,h3{line-height:1.1;margin:0 0 12px;letter-spacing:-.01em}h1{font-size:clamp(2.2rem,6vw,4rem);font-weight:700}h2{font-size:clamp(1.7rem,4vw,2.6rem)}h3{font-size:1.15rem}
+p{margin:0 0 14px}.muted{color:var(--muted)}.center{text-align:center}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:700;border-radius:12px;padding:14px 24px;text-decoration:none;border:1px solid transparent;cursor:pointer;font-size:1rem;transition:transform .15s ease,box-shadow .15s ease,background .15s}
+.btn:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(0,0,0,.18)}.btn.wa{background:var(--wa);color:#06301A}.btn.pri{background:var(--orange);color:#1F1300}.btn.sec{background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.35)}.btn.light{background:var(--card);color:var(--ink);border-color:var(--line)}.btn.xl{padding:17px 30px;font-size:1.08rem}
 /* header */
-.top{position:sticky;top:0;z-index:10;background:rgba(6,26,69,.92);backdrop-filter:blur(8px);color:#fff}
-.top .wrap{display:flex;align-items:center;gap:12px;height:62px}
-.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.15rem;text-decoration:none}.brand img{width:34px;height:34px;border-radius:9px}.brand span{color:var(--sky)}
-.top nav{margin-left:auto;display:flex;gap:18px;font-weight:500;font-size:.95rem}.top nav a{text-decoration:none;opacity:.9}.top nav a:hover{opacity:1}
-.top .btn{padding:9px 14px;font-size:.92rem}
-@media (max-width:720px){.top nav{display:none}}
+.top{position:sticky;top:0;z-index:10;background:rgba(6,26,69,.9);backdrop-filter:blur(10px);color:#fff}
+.top .wrap{display:flex;align-items:center;gap:12px;height:64px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.2rem;text-decoration:none}.brand img{width:34px;height:34px;border-radius:9px}.brand span{color:var(--sky)}
+.top nav{margin-left:auto;display:flex;gap:20px;font-weight:500;font-size:.95rem}.top nav a{text-decoration:none;opacity:.85}.top nav a:hover{opacity:1}
+.top .btn{padding:9px 16px;font-size:.92rem}@media (max-width:760px){.top nav{display:none}}
 /* hero */
-.hero{background:linear-gradient(160deg,#0B2A6F 0%,#061A45 60%,#04122F 100%);color:#fff;padding:64px 0 48px;overflow:hidden}
-.hero .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center}
-.hero p.lead{font-size:1.2rem;color:#C9D6FF;max-width:540px}
-.hero .ctas{display:flex;gap:12px;flex-wrap:wrap;margin:24px 0 10px}
-.hero small{color:#9FB2E6;display:block}
-.hero .kicker{display:inline-block;background:rgba(255,138,0,.15);color:#FFB357;border:1px solid rgba(255,138,0,.4);border-radius:99px;padding:4px 12px;font-weight:600;font-size:.85rem;margin-bottom:16px}
-@media (max-width:860px){.hero .wrap{grid-template-columns:1fr}.hero{padding:44px 0 36px}}
-/* phone mock */
-.phone{width:min(330px,100%);margin:0 auto;background:#0F1522;border:10px solid #1B2540;border-radius:36px;padding:14px 12px;box-shadow:0 30px 70px rgba(0,0,0,.45);color:#E7ECF4;font-size:.86rem}
-.phone .bar{display:flex;justify-content:space-between;align-items:center;font-weight:700;margin:2px 4px 12px}.phone .bar span{color:#7FA6FF;font-weight:500;font-size:.8rem}
-.phone .pc{background:#182033;border-radius:14px;padding:12px;margin-bottom:10px}
-.phone .pc h4{margin:0 0 8px;font-size:.9rem;color:#9AA6BA;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
-.al{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid #243049}.al:first-of-type{border-top:0}
-.al b{display:block;font-size:.9rem}.al small{color:#9AA6BA}
-.tag{font-size:.72rem;font-weight:700;padding:3px 8px;border-radius:99px;white-space:nowrap}.tag.bad{background:#3D1D1A;color:#F2887D}.tag.warn{background:#3A2C14;color:#F0B35A}.tag.ok{background:#16244A;color:#7FA6FF}
-.kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}.kpis div{background:#121A2C;border-radius:10px;padding:10px}.kpis b{display:block;font-size:1.15rem}.kpis small{color:#9AA6BA}
-.phone .go{background:var(--blue2);color:#fff;text-align:center;border-radius:10px;padding:10px;font-weight:700}
+.hero{position:relative;background:radial-gradient(1200px 600px at 80% -10%,#1E4FD6 0%,rgba(30,79,214,0) 55%),radial-gradient(800px 500px at -10% 110%,#FF8A00 0%,rgba(255,138,0,0) 50%),linear-gradient(160deg,#0B2A6F 0%,#061A45 55%,#04122F 100%);color:#fff;padding:72px 0 64px;overflow:hidden}
+.hero::after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;mask-image:linear-gradient(#000,transparent 80%)}
+.hero .wrap{position:relative;display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
+.kicker{display:inline-flex;align-items:center;gap:8px;background:rgba(255,138,0,.16);color:var(--orange2);border:1px solid rgba(255,138,0,.45);border-radius:99px;padding:6px 14px;font-weight:600;font-size:.85rem;margin-bottom:18px}
+.kicker i{width:8px;height:8px;border-radius:50%;background:var(--orange);display:inline-block;box-shadow:0 0 0 0 rgba(255,138,0,.7);animation:pulse 1.8s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,138,0,.7)}70%{box-shadow:0 0 0 10px rgba(255,138,0,0)}100%{box-shadow:0 0 0 0 rgba(255,138,0,0)}}
+.hero h1 em{font-style:normal;color:var(--orange2)}
+.hero p.lead{font-size:1.22rem;color:#C9D6FF;max-width:560px}
+.hero .ctas{display:flex;gap:12px;flex-wrap:wrap;margin:26px 0 14px}
+.trust{display:flex;gap:18px;flex-wrap:wrap;color:#9FB2E6;font-size:.9rem}.trust span::before{content:"✓";color:var(--orange2);font-weight:700;margin-right:6px}
+@media (max-width:900px){.hero .wrap{grid-template-columns:1fr}.hero{padding:48px 0 40px}}
+/* dashboard mockup */
+.shot{background:#0F1522;border:1px solid #243049;border-radius:18px;box-shadow:0 40px 90px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.04) inset;color:#E7ECF4;font-size:.8rem;overflow:hidden;transform:perspective(1200px) rotateY(-6deg) rotateX(2deg);transition:transform .6s ease}
+.shot:hover{transform:perspective(1200px) rotateY(0) rotateX(0)}
+.shot .bar{display:flex;align-items:center;gap:6px;padding:10px 14px;background:#121A2C;border-bottom:1px solid #243049}.shot .bar i{width:10px;height:10px;border-radius:50%;background:#2A3550;display:inline-block}.shot .bar b{margin-left:8px;font-weight:600;color:#9AA6BA;font-size:.78rem}
+.shot .in{padding:14px}
+.kp{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}.kp div{background:#182033;border-radius:10px;padding:10px}.kp b{display:block;font-size:1.1rem;font-family:"IBM Plex Sans Condensed",sans-serif}.kp small{color:#9AA6BA}.kp .h{background:linear-gradient(135deg,#2563EB,#0B2A6F)}.kp .h small{color:#C9D6FF}
+.g2{display:grid;grid-template-columns:1.5fr 1fr;gap:8px}.pc{background:#182033;border-radius:10px;padding:10px}.pc h4{margin:0 0 6px;font-size:.72rem;color:#9AA6BA;text-transform:uppercase;letter-spacing:.05em}
+.pc svg{width:100%;height:auto;display:block}.ln{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:600;stroke-dashoffset:600;animation:draw 1.6s ease forwards}.ln.b{animation-delay:.3s}
+@keyframes draw{to{stroke-dashoffset:0}}
+.hb{display:grid;grid-template-columns:70px 1fr;gap:4px 8px;align-items:center;font-size:.72rem}.hb .r{height:12px;border-radius:0 4px 4px 0;background:#3987E5;width:0;animation:grow 1s ease forwards}.hb .r.o{background:#FF8A00}
+@keyframes grow{to{width:var(--w)}}
+.al{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid #243049;font-size:.76rem}.al:first-of-type{border-top:0}.al small{color:#9AA6BA;display:block}
+.tag{font-size:.66rem;font-weight:700;padding:2px 7px;border-radius:99px;white-space:nowrap}.tag.bad{background:#3D1D1A;color:#F2887D}.tag.warn{background:#3A2C14;color:#F0B35A}
 /* sections */
-section{padding:64px 0}@media (max-width:720px){section{padding:46px 0}}
-.center{text-align:center}.sub{max-width:640px;margin:0 auto 32px;color:var(--muted);font-size:1.08rem}
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
-@media (max-width:860px){.grid3{grid-template-columns:1fr 1fr}}@media (max-width:600px){.grid3,.grid2{grid-template-columns:1fr}}
-.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 1px 2px rgba(20,33,61,.05),0 6px 18px rgba(20,33,61,.05)}
-.card .ic{width:44px;height:44px;border-radius:12px;background:#DFE8FF;display:flex;align-items:center;justify-content:center;font-size:1.4rem;margin-bottom:12px}
+section{padding:72px 0}@media (max-width:720px){section{padding:50px 0}}
+.sub{max-width:680px;margin:0 auto 36px;color:var(--muted);font-size:1.12rem}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+@media (max-width:900px){.grid3,.grid4{grid-template-columns:1fr 1fr}}@media (max-width:600px){.grid3,.grid2,.grid4{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px;box-shadow:0 1px 2px rgba(20,33,61,.05),0 8px 24px rgba(20,33,61,.06)}
+.card .ic{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#DFE8FF,#C7D7FF);display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin-bottom:14px}
 .card p{color:var(--muted);margin:0}
-.pain{background:#fff}.pain .card{border-left:4px solid var(--orange)}.pain .card b{display:block;margin-bottom:6px;font-size:1.05rem}
-.steps{counter-reset:s}.steps .card{position:relative;padding-top:26px}.steps .card::before{counter-increment:s;content:counter(s);position:absolute;top:-16px;left:20px;width:34px;height:34px;border-radius:50%;background:var(--blue);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center}
-/* roles */
-.roles{background:linear-gradient(180deg,#fff,var(--bg))}
+/* números */
+.nums{background:var(--ink2);color:#fff;padding:36px 0}.nums .grid3{gap:12px}.num{text-align:center;padding:10px}.num b{display:block;font-size:clamp(2rem,5vw,3rem);font-family:"IBM Plex Sans Condensed",sans-serif;color:var(--orange2);line-height:1}.num span{color:#C9D6FF;font-size:.95rem}
+/* dolor */
+.pain{background:#fff}.pain .card{border-left:5px solid var(--orange)}.pain .card b{display:block;margin-bottom:6px;font-size:1.1rem}.pain .card .cost{display:inline-block;margin-top:10px;background:#FBE0DD;color:var(--bad);font-weight:700;border-radius:8px;padding:4px 10px;font-size:.9rem}
+/* antes / después */
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:18px}@media (max-width:760px){.vs{grid-template-columns:1fr}}
+.vs .card ul{list-style:none;padding:0;margin:0}.vs .card li{padding:9px 0;border-top:1px solid var(--line);display:flex;gap:10px;align-items:flex-start}.vs .card li:first-child{border-top:0}
+.vs .no li::before{content:"✕";color:var(--bad);font-weight:700;flex:none}.vs .si li::before{content:"✓";color:var(--ok);font-weight:700;flex:none}.vs .si{border:2px solid var(--blue);background:linear-gradient(180deg,#fff,#F3F6FF)}
+/* calculadora */
+.calc{background:linear-gradient(160deg,#0B2A6F,#061A45);color:#fff}.calc .card{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);color:#fff}.calc .card p{color:#C9D6FF}
+.calc label{display:block;font-weight:600;font-size:.9rem;margin-bottom:6px;color:#C9D6FF}.calc input[type=range]{width:100%;accent-color:var(--orange)}
+.calc input[type=number]{width:100%;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff}
+.calc .out{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}.calc .out div{background:rgba(255,255,255,.08);border-radius:14px;padding:16px}.calc .out b{display:block;font-size:1.9rem;font-family:"IBM Plex Sans Condensed",sans-serif;color:var(--orange2)}.calc .out small{color:#C9D6FF}
+.calc .big{font-size:3.2rem;font-family:"IBM Plex Sans Condensed",sans-serif;color:#fff;line-height:1}
+/* pasos */
+.steps{counter-reset:s}.steps .card{position:relative;padding-top:30px}.steps .card::before{counter-increment:s;content:counter(s);position:absolute;top:-18px;left:22px;width:38px;height:38px;border-radius:50%;background:var(--blue);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(29,78,216,.4)}
 .role{display:flex;gap:14px;align-items:flex-start}.role .ic{flex:none}
-/* pricing */
-.plans .card{display:flex;flex-direction:column;text-align:center;padding-top:28px}.plans .card.best{border:2px solid var(--blue);position:relative}
-.plans .card.best::before{content:"El más elegido";position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--blue);color:#fff;font-size:.78rem;font-weight:700;padding:3px 12px;border-radius:99px}
-.price{font-size:2.4rem;font-weight:700;margin:6px 0 0}.price small{font-size:1rem;color:var(--muted);font-weight:500}.per{color:var(--muted);margin-bottom:16px}
+/* planes */
+.plans .card{display:flex;flex-direction:column;text-align:center;padding-top:30px}.plans .card.best{border:2px solid var(--blue);position:relative;transform:scale(1.03)}
+.plans .card.best::before{content:"El más elegido";position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:var(--blue);color:#fff;font-size:.78rem;font-weight:700;padding:4px 14px;border-radius:99px}
+.price{font-size:2.6rem;font-weight:700;margin:6px 0 0;font-family:"IBM Plex Sans Condensed",sans-serif}.price small{font-size:1rem;color:var(--muted);font-weight:500;font-family:"IBM Plex Sans",sans-serif}.per{color:var(--muted);margin-bottom:16px}
 .plans ul{list-style:none;padding:0;margin:0 0 20px;text-align:left}.plans li{padding:7px 0;border-top:1px solid var(--line);display:flex;gap:8px}.plans li::before{content:"✓";color:var(--ok);font-weight:700}
-.plans .btn{margin-top:auto}
-.note{text-align:center;color:var(--muted);margin-top:18px;font-size:.95rem}
-/* faq */
-details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px 18px;margin-bottom:10px}summary{cursor:pointer;font-weight:600;padding:12px 0}details p{color:var(--muted);padding-bottom:12px}
-/* cta */
-.cta{background:linear-gradient(160deg,#0B2A6F,#061A45);color:#fff;text-align:center}.cta p{color:#C9D6FF;font-size:1.1rem;max-width:600px;margin:0 auto 24px}
-.cta .ctas{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-footer{background:#04122F;color:#9FB2E6;padding:28px 0;font-size:.9rem}footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}footer a{color:#C9D6FF}
-.demo{background:var(--card);border:1px dashed var(--blue);border-radius:12px;padding:14px 18px;display:inline-block;text-align:left;margin-top:8px}
-.demo code{background:#DFE8FF;padding:2px 8px;border-radius:6px;font-weight:600}
-/* formulario de registro */
-.f{margin-bottom:12px}.f label{display:block;font-weight:600;font-size:.9rem;margin-bottom:4px}.f input,.f select{width:100%;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
-.f input:focus,.f select:focus{outline:3px solid #BFD0FF;border-color:var(--blue)}.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media (max-width:600px){.g2{grid-template-columns:1fr}}
+.plans .btn{margin-top:auto}.note{text-align:center;color:var(--muted);margin-top:18px}
+/* registro */
+.f{margin-bottom:12px}.f label{display:block;font-weight:600;font-size:.9rem;margin-bottom:4px}.f input,.f select{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
+.f input:focus,.f select:focus{outline:3px solid #BFD0FF;border-color:var(--blue)}.g2f{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media (max-width:600px){.g2f{grid-template-columns:1fr}}
 .ferr{color:var(--bad);font-weight:600;min-height:1.3em;margin:6px 0}
-/* WhatsApp flotante */
-.fab{position:fixed;right:16px;bottom:16px;z-index:20;box-shadow:0 10px 30px rgba(0,0,0,.25);border-radius:99px}
-@media (prefers-reduced-motion:reduce){.btn,html{transition:none;scroll-behavior:auto}}
+.demo{background:var(--card);border:1px dashed var(--blue);border-radius:12px;padding:14px 18px;display:inline-block;text-align:left;margin-top:8px}.demo code{background:#DFE8FF;padding:2px 8px;border-radius:6px;font-weight:600}
+details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px 18px;margin-bottom:10px}summary{cursor:pointer;font-weight:600;padding:12px 0}details p{color:var(--muted);padding-bottom:12px}
+.cta{background:linear-gradient(160deg,#0B2A6F,#04122F);color:#fff;text-align:center}.cta p{color:#C9D6FF;font-size:1.15rem;max-width:620px;margin:0 auto 26px}.cta .ctas{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+footer{background:#04122F;color:#9FB2E6;padding:28px 0;font-size:.9rem}footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}footer a{color:#C9D6FF}
+.fab{position:fixed;right:16px;bottom:16px;z-index:20;box-shadow:0 10px 30px rgba(0,0,0,.3);border-radius:99px}
+/* reveal */
+.rv{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s ease}.rv.on{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}.ln,.hb .r{animation:none;stroke-dashoffset:0;width:var(--w)}.shot{transform:none}html{scroll-behavior:auto}.kicker i{animation:none}}
 </style>
 </head>
 <body>
 <header class="top"><div class="wrap">
   <a class="brand" href="#"><img src="/icon.svg" alt="">Flota<span>Control</span></a>
-  <nav><a href="#funciones">Funciones</a><a href="#como">Cómo funciona</a><a href="#planes">Planes</a><a href="#demo">Demo</a><a href="#registro">Crear cuenta</a></nav>
-  <a class="btn sec" href="/">Ingresar</a>
+  <nav><a href="#funciones">Funciones</a><a href="#calc">Cuánto ahorro</a><a href="#planes">Planes</a><a href="#demo">Demo</a><a href="#faq">Preguntas</a></nav>
+  <a class="btn sec" href="/">Ingresar</a><a class="btn pri" href="#registro" style="margin-left:4px">Empezar gratis</a>
 </div></header>
 
 <section class="hero"><div class="wrap">
   <div>
-    <span class="kicker">Para flotas de 3 a 300 vehículos</span>
-    <h1>Que ningún vehículo se te pare por un mantenimiento olvidado</h1>
-    <p class="lead">FlotaControl te avisa qué mantenimiento toca, detecta cuando un vehículo gasta más combustible de lo normal y te dice cuánto cuesta cada kilómetro. Tus conductores registran desde el celular en 20 segundos, con o sin señal.</p>
+    <span class="kicker"><i></i> Para flotas de 3 a 300 vehículos · Bolivia y Latinoamérica</span>
+    <h1>Tu flota te está costando <em>más de lo que crees.</em></h1>
+    <p class="lead">Un cambio de aceite olvidado se convierte en un motor fundido. Un surtidor que "cobra de más" pasa meses sin que nadie lo note. FlotaControl te avisa antes, con datos que tus conductores cargan en 20 segundos desde el celular.</p>
     <div class="ctas">
-      <a class="btn wa" data-wa href="#contacto">💬 Pedir una demostración</a>
-      <a class="btn sec" href="#registro">Crear mi cuenta gratis</a>
+      <a class="btn pri xl" href="#registro">Empezar gratis 30 días</a>
+      <a class="btn sec xl" href="#demo">Ver la demo con datos reales</a>
     </div>
-    <small>Sin instalación. Sin contrato. Funciona en cualquier celular o computadora.</small>
+    <div class="trust"><span>Sin tarjeta</span><span>Sin instalación</span><span>Funciona sin señal</span><span>Soporte por WhatsApp</span></div>
   </div>
-  <div class="phone" aria-hidden="true">
-    <div class="bar">Transportes Demo <span>Hoy</span></div>
-    <div class="pc"><h4>Mantenimientos</h4>
-      <div class="al"><div><b>1986BNM · Cambio de aceite</b><small>Vencido hace 1 240 km</small></div><span class="tag bad">Vencido</span></div>
-      <div class="al"><div><b>3159PRT · SOAT</b><small>Vence en 9 días</small></div><span class="tag warn">Próximo</span></div>
-      <div class="al"><div><b>4512GHJ · Revisión de frenos</b><small>En ~12 días según su uso</small></div><span class="tag ok">Planificado</span></div>
+  <div class="shot" aria-hidden="true">
+    <div class="bar"><i></i><i></i><i></i><b>Transportes Demo · Dashboard de la flota</b></div>
+    <div class="in">
+      <div class="kp"><div class="h"><b>Bs 48.170</b><small>Gasto del mes</small></div><div><b>Bs 1,46</b><small>Costo por km</small></div><div><b style="color:#F2887D">2</b><small>Mantenim. vencidos</small></div></div>
+      <div class="g2">
+        <div class="pc"><h4>Gasto por mes</h4><svg viewBox="0 0 300 110"><g stroke="#243049" stroke-width="1"><line x1="0" x2="300" y1="20" y2="20"/><line x1="0" x2="300" y1="60" y2="60"/><line x1="0" x2="300" y1="100" y2="100"/></g>
+          <path class="ln" stroke="#3987E5" d="M10 78 L58 60 L106 66 L154 38 L202 46 L250 30 L290 24"/><path class="ln b" stroke="#FF8A00" d="M10 96 L58 90 L106 92 L154 70 L202 86 L250 76 L290 80"/>
+          <g fill="#9AA6BA" font-size="9"><text x="10" y="109">abr</text><text x="58" y="109">may</text><text x="106" y="109">jun</text><text x="154" y="109">jul</text><text x="202" y="109">ago</text><text x="250" y="109">sep</text><text x="282" y="109">oct</text></g></svg>
+          <div style="display:flex;gap:10px;font-size:.68rem;color:#9AA6BA;margin-top:4px"><span><i style="display:inline-block;width:8px;height:8px;background:#3987E5;border-radius:2px"></i> Combustible</span><span><i style="display:inline-block;width:8px;height:8px;background:#FF8A00;border-radius:2px"></i> Mantenimiento</span></div></div>
+        <div class="pc"><h4>Por parqueo</h4><div class="hb"><span>Santa Cruz</span><div class="r" style="--w:100%"></div><span>La Paz</span><div class="r" style="--w:62%"></div><span>Cochabamba</span><div class="r o" style="--w:41%"></div><span>Tarija</span><div class="r" style="--w:22%"></div></div>
+          <h4 style="margin-top:10px">Alertas</h4>
+          <div class="al"><div>1986BNM<small>Cambio de aceite</small></div><span class="tag bad">Vencido</span></div>
+          <div class="al"><div>3159PRT<small>SOAT · 9 días</small></div><span class="tag warn">Próximo</span></div>
+          <div class="al"><div>4512GHJ<small>Consumo +22 %</small></div><span class="tag warn">Revisar</span></div></div>
+      </div>
     </div>
-    <div class="pc"><h4>Este mes</h4><div class="kpis">
-      <div><b>Bs 18 430</b><small>Gasto total</small></div><div><b>Bs 1,46</b><small>Costo por km</small></div>
-      <div><b>9,4 km/l</b><small>Rendimiento flota</small></div><div><b>1 alerta</b><small>Consumo anormal</small></div></div></div>
-    <div class="go">📷 Registrar escaneando el QR</div>
   </div>
 </div></section>
 
+<div class="nums"><div class="wrap grid3">
+  <div class="num rv"><b data-n="48">0</b><span>meses de FlotaControl cuesta lo mismo que <u>una sola</u> reparación de motor por aceite no cambiado*</span></div>
+  <div class="num rv"><b data-n="20">0</b><span>segundos tarda un conductor en registrar una carga: escanea el QR, escribe km y litros, foto, listo</span></div>
+  <div class="num rv"><b data-n="7">0</b><span>días antes te avisa de cada SOAT, inspección, seguro o licencia que vence</span></div>
+</div><p class="center" style="color:#9FB2E6;font-size:.8rem;margin:14px 0 0">* Reparación referencial de Bs 12.000 frente al plan Flota de Bs 249 al mes.</p></div>
+
 <section class="pain"><div class="wrap">
-  <h2 class="center">¿Te suena?</h2>
-  <p class="sub center">Casi todas las empresas con vehículos llevan el control en un cuaderno, en Excel o en la cabeza del jefe de flota. Hasta que algo falla.</p>
+  <h2 class="center rv">Tres cosas que pasan cuando el control está en un cuaderno</h2>
+  <p class="sub center rv">Casi todas las empresas con vehículos lo llevan en Excel, en un cuaderno o en la cabeza del jefe de flota. Funciona… hasta que deja de funcionar.</p>
   <div class="grid3">
-    <div class="card"><b>El motor se fundió</b><p>Nadie se acordó del cambio de aceite. Una reparación de miles de bolivianos por un mantenimiento de 400.</p></div>
-    <div class="card"><b>"Cargó 80 litros otra vez"</b><p>Un vehículo gasta cada vez más y no sabes si es el motor, el conductor o el surtidor. Sin datos, no hay cómo reclamar.</p></div>
-    <div class="card"><b>El SOAT venció y el vehículo está en ruta</b><p>Multas, retención y un cliente esperando. Con un aviso 7 días antes esto no pasa.</p></div>
+    <div class="card rv"><b>🔥 El motor se fundió</b><p>Nadie se acordó del cambio de aceite del camión que más trabaja. Dos semanas parado y una reparación que no estaba en el presupuesto.</p><span class="cost">≈ Bs 12.000 + días sin facturar</span></div>
+    <div class="card rv"><b>⛽ "Otra vez cargó 80 litros"</b><p>Un vehículo gasta cada mes más y no sabes si es el motor, el conductor o el surtidor. Sin km/l por carga, no hay a quién reclamar.</p><span class="cost">≈ 15 % de combustible que se va sin explicación</span></div>
+    <div class="card rv"><b>📄 El SOAT venció en ruta</b><p>Multa, vehículo retenido, cliente esperando y el chofer llamando a las 6 de la mañana. Con un aviso siete días antes, no pasa.</p><span class="cost">Multa + retención + cliente perdido</span></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <h2 class="center rv">Antes y después</h2>
+  <div class="vs">
+    <div class="card no rv"><h3>Cuaderno y Excel</h3><ul><li>Te enteras del mantenimiento cuando el vehículo ya falló</li><li>El consumo se revisa "a ojo", una vez al mes, si hay tiempo</li><li>Las facturas se pierden y contabilidad transcribe a mano</li><li>Cada regional lleva su propio archivo, nadie ve el total</li><li>Los conductores anotan lo que quieren, como quieren</li></ul></div>
+    <div class="card si rv"><h3>Con FlotaControl</h3><ul><li>Fecha estimada de cada mantenimiento según el uso real del vehículo</li><li>km/l calculado en cada carga; alerta inmediata si baja</li><li>Foto de la factura en el registro y exportación contable en un clic</li><li>Un dashboard por parqueo y uno consolidado para gerencia</li><li>Listas cerradas de talleres y surtidores: no se escribe cualquier cosa</li></ul></div>
+  </div>
+</div></section>
+
+<section id="calc" class="calc"><div class="wrap">
+  <h2 class="center rv">¿Cuánto te ahorra al mes?</h2>
+  <p class="sub center rv" style="color:#C9D6FF">Mueve el número de vehículos. Los supuestos son conservadores y los puedes cambiar.</p>
+  <div class="grid2">
+    <div class="card rv">
+      <label>Vehículos en tu flota: <b id="cv">20</b></label><input type="range" id="rv" min="3" max="300" value="20">
+      <div class="g2f" style="margin-top:14px"><div><label>Combustible por vehículo al mes (Bs)</label><input type="number" id="rc" value="1800"></div><div><label>Ahorro de combustible con control (%)</label><input type="number" id="rp" value="5"></div></div>
+      <div class="g2f" style="margin-top:10px"><div><label>Averías evitables al año por cada 10 vehículos</label><input type="number" id="ra" value="1"></div><div><label>Costo promedio de una avería (Bs)</label><input type="number" id="rb" value="8000"></div></div>
+      <p style="margin-top:12px;font-size:.85rem">Estimación referencial: combustible con km/l vigilado y mantenimientos a tiempo. No incluye multas evitadas ni días sin operar.</p>
+    </div>
+    <div class="card rv center">
+      <p style="margin-bottom:4px">Ahorro estimado al mes</p><div class="big" id="rt">Bs 0</div>
+      <div class="out"><div><b id="rf">Bs 0</b><small>en combustible</small></div><div><b id="rm">Bs 0</b><small>en averías evitadas</small></div><div><b id="rpl">Bs 249</b><small>cuesta el plan <span id="rpn">Flota</span></small></div><div><b id="rx">0×</b><small>veces se paga solo</small></div></div>
+      <a class="btn pri xl" href="#registro" style="margin-top:18px">Empezar gratis 30 días</a>
+    </div>
   </div>
 </div></section>
 
 <section id="funciones"><div class="wrap">
-  <h2 class="center">Todo lo que necesitas, nada que sobre</h2>
-  <p class="sub center">Pensado para empresas de transporte, distribución, construcción y servicios de Bolivia. En español, en bolivianos, con SOAT e inspección técnica.</p>
+  <h2 class="center rv">Todo lo que necesitas para controlar la flota</h2>
+  <p class="sub center rv">Pensado para transporte, distribución, construcción y servicios. En español, en tu moneda, con los documentos de tu país.</p>
   <div class="grid3">
-    <div class="card"><div class="ic">🔧</div><h3>Mantenimiento preventivo</h3><p>Planes por kilómetros o por días para cada vehículo. El sistema calcula la fecha estimada según el uso real y te muestra primero lo vencido.</p></div>
-    <div class="card"><div class="ic">⛽</div><h3>Control de combustible</h3><p>Rendimiento km/l entre cargas de tanque lleno. Si un vehículo baja de lo esperado, te avisa en el momento.</p></div>
-    <div class="card"><div class="ic">📊</div><h3>Costo por kilómetro</h3><p>Combustible, mantenimiento, lavados, peajes y multas por vehículo, por parqueo y por mes. Descarga a Excel con un clic.</p></div>
-    <div class="card"><div class="ic">📄</div><h3>Documentos al día</h3><p>SOAT, inspección técnica, seguro y licencias de los conductores con aviso antes del vencimiento.</p></div>
-    <div class="card"><div class="ic">📱</div><h3>Registro desde el celular</h3><p>El conductor escanea el QR pegado en el vehículo, escribe km y litros, toma la foto de la factura y listo. Sin señal también: se envía solo después.</p></div>
-    <div class="card"><div class="ic">🛡️</div><h3>Datos confiables</h3><p>Listas cerradas de talleres y surtidores, foto obligatoria si lo decides, correcciones con historial y permisos por usuario y por parqueo.</p></div>
+    <div class="card rv"><div class="ic">🔧</div><h3>Mantenimiento preventivo</h3><p>Planes por km o por días para cada vehículo. Fecha estimada según el uso real. Primero lo vencido, siempre.</p></div>
+    <div class="card rv"><div class="ic">⛽</div><h3>Combustible vigilado</h3><p>km/l en cada tanque lleno. Si un vehículo baja de lo esperado, alerta en el momento y queda marcado quién manejaba.</p></div>
+    <div class="card rv"><div class="ic">📊</div><h3>Dashboard que se entiende</h3><p>Gasto por mes, por parqueo, por proveedor y por vehículo. Costo por km, presupuesto con semáforo y exportación contable.</p></div>
+    <div class="card rv"><div class="ic">📱</div><h3>Registro en 20 segundos</h3><p>El conductor escanea el QR del vehículo, carga km, litros y la foto de la factura. Sin señal también: se envía solo después.</p></div>
+    <div class="card rv"><div class="ic">🛞</div><h3>Llantas, baterías y repuestos</h3><p>Vida útil de cada llanta y batería, stock de repuestos con mínimo y aviso cuando hay que comprar.</p></div>
+    <div class="card rv"><div class="ic">✉️</div><h3>Resumen cada mañana</h3><p>Correo diario con lo vencido, lo próximo y los documentos por vencer. Y el mismo resumen por WhatsApp con un toque.</p></div>
   </div>
 </div></section>
 
-<section id="como" class="roles"><div class="wrap">
-  <h2 class="center">Cómo funciona</h2>
-  <p class="sub center">Empiezas a usarlo el mismo día. No hay nada que instalar en las computadoras.</p>
+<section style="background:#fff"><div class="wrap">
+  <h2 class="center rv">Cómo funciona</h2>
+  <p class="sub center rv">Empiezas el mismo día. No hay nada que instalar en las computadoras.</p>
   <div class="grid3 steps">
-    <div class="card"><h3>Cargas tus vehículos</h3><p>Placa, documentos y el conductor asignado. Se crean solos los planes de mantenimiento típicos, y los ajustas a tu gusto.</p></div>
-    <div class="card"><h3>Pegas un QR en cada vehículo</h3><p>Lo imprimes desde la app. El conductor lo escanea con su celular y registra combustible, lavados o gastos en segundos.</p></div>
-    <div class="card"><h3>Ves todo en el panel</h3><p>Qué mantenimiento toca, qué documento vence, cuánto gastaste y qué vehículo está consumiendo de más. Resumen diario por WhatsApp.</p></div>
+    <div class="card rv"><h3>Cargas tus vehículos</h3><p>Placa, documentos y conductor. Los planes de mantenimiento típicos se crean solos y los ajustas a tu gusto.</p></div>
+    <div class="card rv"><h3>Pegas un QR en cada vehículo</h3><p>Lo imprimes desde la app. El conductor lo escanea con su celular y registra combustible, lavados o gastos.</p></div>
+    <div class="card rv"><h3>Ves todo en el dashboard</h3><p>Qué mantenimiento toca, qué documento vence, cuánto gastaste y qué vehículo consume de más. Por parqueo y consolidado.</p></div>
   </div>
-  <div style="height:34px"></div>
+  <div style="height:36px"></div>
   <div class="grid3">
-    <div class="card role"><div class="ic">🧑‍✈️</div><div><h3>Conductor</h3><p>Solo ve Registrar. Escanea, escribe, foto, guardar. Puede corregir lo suyo hasta 24 horas después.</p></div></div>
-    <div class="card role"><div class="ic">🧰</div><div><h3>Jefe de flota</h3><p>Planes de mantenimiento, vehículos, proveedores y el historial completo con anulaciones y correcciones.</p></div></div>
-    <div class="card role"><div class="ic">👔</div><div><h3>Gerencia</h3><p>Costos por vehículo y por parqueo, costo por km, alertas de consumo y descarga a Excel para contabilidad.</p></div></div>
+    <div class="card role rv"><div class="ic">🧑‍✈️</div><div><h3>Conductor</h3><p>Solo ve Registrar. Escanea, escribe, foto, guardar. Corrige lo suyo hasta 24 horas después.</p></div></div>
+    <div class="card role rv"><div class="ic">🧰</div><div><h3>Jefe de flota</h3><p>Mantenimiento, vehículos, proveedores, repuestos y el historial completo con anulaciones y correcciones.</p></div></div>
+    <div class="card role rv"><div class="ic">👔</div><div><h3>Gerencia</h3><p>Costos por vehículo y por regional, costo por km, presupuesto y la exportación para contabilidad.</p></div></div>
   </div>
 </div></section>
 
 <section id="planes"><div class="wrap">
-  <h2 class="center">Planes simples, precio en bolivianos</h2>
-  <p class="sub center">Pago mensual. Puedes cambiar de plan cuando tu flota crezca. Sin costo de instalación ni permanencia.</p>
+  <h2 class="center rv">Planes simples, en bolivianos</h2>
+  <p class="sub center rv">Pago mensual. Cambias de plan cuando tu flota crece. Sin instalación ni permanencia.</p>
   <div class="grid3 plans">
-    <div class="card"><h3>Básico</h3><div class="price">Bs 99<small>/mes</small></div><div class="per">Para empezar</div>
+    <div class="card rv"><h3>Básico</h3><div class="price">Bs 99<small>/mes</small></div><div class="per">Para empezar</div>
       <ul><li>Hasta 5 vehículos</li><li>5 usuarios</li><li>1 parqueo</li><li>Mantenimiento, combustible y costos</li><li>App para el celular con QR</li></ul>
-      <a class="btn light" data-wa data-plan="Básico" href="#contacto">Quiero este plan</a></div>
-    <div class="card best"><h3>Flota</h3><div class="price">Bs 249<small>/mes</small></div><div class="per">Para empresas en crecimiento</div>
-      <ul><li>Hasta 50 vehículos</li><li>50 usuarios</li><li>5 parqueos o bases</li><li>Todo lo del plan Básico</li><li>Permisos por parqueo</li><li>Resumen por WhatsApp</li></ul>
-      <a class="btn pri" data-wa data-plan="Flota" href="#contacto">Quiero este plan</a></div>
-    <div class="card"><h3>Empresa</h3><div class="price">Bs 499<small>/mes</small></div><div class="per">Sin límites</div>
+      <a class="btn light" href="#registro">Empezar gratis</a></div>
+    <div class="card best rv"><h3>Flota</h3><div class="price">Bs 249<small>/mes</small></div><div class="per">Para empresas en crecimiento</div>
+      <ul><li>Hasta 50 vehículos</li><li>50 usuarios</li><li>5 parqueos o bases</li><li>Todo lo del plan Básico</li><li>Permisos por parqueo</li><li>Resumen diario por correo y WhatsApp</li><li>Repuestos, llantas y presupuestos</li></ul>
+      <a class="btn pri" href="#registro">Empezar gratis 30 días</a></div>
+    <div class="card rv"><h3>Empresa</h3><div class="price">Bs 499<small>/mes</small></div><div class="per">Sin límites</div>
       <ul><li>Vehículos ilimitados</li><li>Usuarios ilimitados</li><li>Parqueos ilimitados</li><li>Todo lo del plan Flota</li><li>Acompañamiento en la puesta en marcha</li></ul>
-      <a class="btn light" data-wa data-plan="Empresa" href="#contacto">Quiero este plan</a></div>
+      <a class="btn light" data-wa data-plan="Empresa" href="#contacto">Hablar con ventas</a></div>
   </div>
-  <p class="note">Primer mes de prueba: te cargamos la flota contigo y si no te sirve, no pagas nada.</p>
+  <p class="note rv">Los 30 días de prueba son con el plan Flota completo. Si no te sirve, no pagas nada.</p>
 </div></section>
 
-<section id="demo" class="center" style="background:#fff"><div class="wrap">
-  <h2>Pruébalo con datos de ejemplo</h2>
-  <p class="sub">Entra a la empresa de demostración: 6 vehículos, 6 meses de registros, mantenimientos vencidos y un vehículo con consumo anormal para que veas las alertas.</p>
-  <div class="demo">Usuario <code>demo.admin</code> &nbsp; Contraseña <code>demo1234</code><br><small class="muted">Jefa de flota: ve todo. Con <code>demo.chofer</code> y la misma clave ves lo que ve un conductor.</small></div>
-  <div style="margin-top:18px"><a class="btn pri" href="/" target="_blank" rel="noopener">Abrir la demo</a></div>
-</div></section>
-
-<section id="registro"><div class="wrap" style="max-width:680px">
-  <h2 class="center">Crea tu cuenta gratis</h2>
-  <p class="sub center">30 días de prueba con el plan Flota, sin tarjeta y sin compromiso. En dos minutos estás cargando tus vehículos.</p>
-  <form id="regForm" class="card" novalidate>
+<section id="registro" style="background:#fff"><div class="wrap" style="max-width:700px">
+  <h2 class="center rv">Crea tu cuenta en dos minutos</h2>
+  <p class="sub center rv">30 días gratis con el plan Flota. Sin tarjeta. Entras directo y empiezas a cargar vehículos.</p>
+  <form id="regForm" class="card rv" novalidate>
     <div class="f"><label for="rEmp">Nombre de tu empresa *</label><input id="rEmp" required autocomplete="organization"></div>
-    <div class="g2"><div class="f"><label for="rNom">Tu nombre *</label><input id="rNom" required autocomplete="name"></div><div class="f"><label for="rPais">País</label><select id="rPais"><option value="BO">Bolivia</option><option value="PE">Perú</option><option value="AR">Argentina</option><option value="CL">Chile</option><option value="CO">Colombia</option><option value="EC">Ecuador</option><option value="PY">Paraguay</option><option value="UY">Uruguay</option><option value="MX">México</option><option value="OT">Otro país</option></select></div></div>
-    <div class="g2"><div class="f"><label for="rTel">WhatsApp con código de país *</label><input id="rTel" inputmode="tel" placeholder="59170000000" required autocomplete="tel"></div><div class="f"><label for="rMail">Correo *</label><input id="rMail" type="email" required autocomplete="email"></div></div>
-    <div class="g2"><div class="f"><label for="rUser">Usuario para ingresar *</label><input id="rUser" autocapitalize="none" required autocomplete="username"></div><div class="f"><label for="rPass">Contraseña (mínimo 8) *</label><input id="rPass" type="password" required autocomplete="new-password"></div></div>
+    <div class="g2f"><div class="f"><label for="rNom">Tu nombre *</label><input id="rNom" required autocomplete="name"></div><div class="f"><label for="rPais">País</label><select id="rPais"><option value="BO">Bolivia</option><option value="PE">Perú</option><option value="AR">Argentina</option><option value="CL">Chile</option><option value="CO">Colombia</option><option value="EC">Ecuador</option><option value="PY">Paraguay</option><option value="UY">Uruguay</option><option value="MX">México</option><option value="OT">Otro país</option></select></div></div>
+    <div class="g2f"><div class="f"><label for="rTel">WhatsApp con código de país *</label><input id="rTel" inputmode="tel" placeholder="59170000000" required autocomplete="tel"></div><div class="f"><label for="rMail">Correo *</label><input id="rMail" type="email" required autocomplete="email"></div></div>
+    <div class="g2f"><div class="f"><label for="rUser">Usuario para ingresar *</label><input id="rUser" autocapitalize="none" required autocomplete="username"></div><div class="f"><label for="rPass">Contraseña (mínimo 8) *</label><input id="rPass" type="password" required autocomplete="new-password"></div></div>
     <div class="ferr" id="rErr"></div>
-    <button class="btn pri" type="submit" id="rBtn" style="width:100%">Crear mi cuenta y entrar</button>
-    <small class="muted" style="display:block;margin-top:10px;text-align:center">Te escribiremos por WhatsApp para ayudarte con la puesta en marcha. Sin cobros automáticos.</small>
+    <button class="btn pri xl" type="submit" id="rBtn" style="width:100%">Crear mi cuenta y entrar</button>
+    <small class="muted" style="display:block;margin-top:10px;text-align:center">Te escribimos por WhatsApp para ayudarte con la puesta en marcha. Sin cobros automáticos.</small>
   </form>
 </div></section>
 
-<section id="faq" style="background:#fff"><div class="wrap" style="max-width:760px">
-  <h2 class="center">Preguntas frecuentes</h2>
-  <details><summary>¿Mis conductores necesitan un celular especial?</summary><p>No. Funciona en cualquier Android o iPhone desde el navegador, y se puede "instalar" en la pantalla de inicio como una app. No ocupa casi espacio.</p></details>
-  <details><summary>¿Qué pasa donde no hay señal?</summary><p>El registro se guarda en el teléfono y se envía solo cuando vuelve la conexión. El conductor no tiene que hacer nada.</p></details>
-  <details><summary>¿Cómo evito que registren cualquier cosa?</summary><p>Tú defines la lista de talleres, surtidores y lavaderos; el conductor solo puede elegir de ahí. Si el kilometraje baja o sube demasiado, el sistema pide confirmación y deja marcada la alerta. Las fotos de facturas quedan guardadas.</p></details>
-  <details><summary>¿Puedo tener varias bases o sucursales?</summary><p>Sí. Cada usuario puede ver solo los vehículos de su parqueo, y gerencia ve el consolidado.</p></details>
-  <details><summary>¿Dónde quedan mis datos?</summary><p>En la nube de Cloudflare, con copia de seguridad y acceso cifrado. Puedes descargar todo tu historial a Excel en cualquier momento.</p></details>
-  <details><summary>¿Ya tengo historial en Excel, lo pierdo?</summary><p>No. En la puesta en marcha cargamos tus vehículos y el último mantenimiento de cada uno para que las alertas arranquen bien desde el primer día.</p></details>
+<section id="demo" class="center"><div class="wrap">
+  <h2 class="rv">Míralo funcionando con datos reales</h2>
+  <p class="sub rv">Una empresa de demostración con 6 vehículos, 6 meses de registros, mantenimientos vencidos y un vehículo con consumo anormal. Toca todo lo que quieras.</p>
+  <div class="demo rv">Usuario <code>demo.admin</code> &nbsp; Contraseña <code>demo1234</code><br><small class="muted">Jefa de flota: ve todo. Con <code>demo.chofer</code> y la misma clave ves lo que ve un conductor.</small></div>
+  <div style="margin-top:18px" class="rv"><a class="btn pri xl" href="/" target="_blank" rel="noopener">Abrir la demo</a></div>
+</div></section>
+
+<section id="faq" style="background:#fff"><div class="wrap" style="max-width:780px">
+  <h2 class="center rv">Preguntas frecuentes</h2>
+  <details class="rv"><summary>¿Mis conductores necesitan un celular especial?</summary><p>No. Funciona en cualquier Android o iPhone desde el navegador, y se "instala" en la pantalla de inicio como una app. No ocupa casi espacio.</p></details>
+  <details class="rv"><summary>¿Qué pasa donde no hay señal?</summary><p>El registro se guarda en el teléfono y se envía solo cuando vuelve la conexión. El conductor no tiene que hacer nada.</p></details>
+  <details class="rv"><summary>¿Cómo evito que registren cualquier cosa?</summary><p>Tú defines la lista de talleres, surtidores y lavaderos; el conductor solo puede elegir de ahí. Puedes exigir la foto de la factura. Si el kilometraje baja o sube demasiado, el sistema pide confirmación y deja la alerta marcada.</p></details>
+  <details class="rv"><summary>¿Tengo varias regionales o bases?</summary><p>Sí. Cada usuario ve solo los vehículos de su parqueo, y gerencia ve el consolidado o filtra por regional en el dashboard.</p></details>
+  <details class="rv"><summary>¿Dónde quedan mis datos?</summary><p>En la nube de Cloudflare, con copia de seguridad y acceso cifrado. Puedes descargar todo tu historial a Excel cuando quieras.</p></details>
+  <details class="rv"><summary>¿Ya tengo historial en Excel, lo pierdo?</summary><p>No. En la puesta en marcha cargamos tus vehículos y el último mantenimiento de cada uno para que las alertas arranquen bien desde el primer día.</p></details>
 </div></section>
 
 <section id="contacto" class="cta"><div class="wrap">
-  <h2>Hablemos de tu flota</h2>
-  <p>Escríbenos por WhatsApp y en 15 minutos te mostramos el sistema con tus propios vehículos.</p>
-  <div class="ctas"><a class="btn wa" data-wa href="#contacto">💬 Escribir por WhatsApp</a><a class="btn sec" href="/">Ya tengo cuenta: Ingresar</a></div>
+  <h2 class="rv">Hablemos de tu flota</h2>
+  <p class="rv">Escríbenos por WhatsApp y en 15 minutos te mostramos el sistema con tus propios vehículos.</p>
+  <div class="ctas rv"><a class="btn wa xl" data-wa href="#contacto">💬 Escribir por WhatsApp</a><a class="btn pri xl" href="#registro">Empezar gratis 30 días</a></div>
 </div></section>
 
 <footer><div class="wrap"><span>© <span id="anio"></span> FlotaControl · Santa Cruz, Bolivia</span><span><a href="/">Ingresar a la app</a></span></div></footer>
 <a class="btn wa fab" data-wa href="#contacto" aria-label="Escribir por WhatsApp">💬 WhatsApp</a>
 
 <script>
-// Número de WhatsApp de ventas, con código de país y sin espacios (ej: 59170000000). Si queda vacío, los botones llevan al formulario de contacto.
+// Número de WhatsApp de ventas, con código de país y sin espacios. Si queda vacío, los botones llevan a la sección de contacto.
 const WHATSAPP = "59162466662";
 document.getElementById("anio").textContent = new Date().getFullYear();
 document.querySelectorAll("[data-wa]").forEach(a => {
@@ -223,13 +274,29 @@ document.querySelectorAll("[data-wa]").forEach(a => {
   a.href = "https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent("Hola, quiero una demostración de FlotaControl para mi empresa." + plan);
   a.target = "_blank"; a.rel = "noopener";
 });
+// Aparición al hacer scroll
+const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("on"); io.unobserve(e.target); } }), { threshold: .12 });
+document.querySelectorAll(".rv").forEach(el => io.observe(el));
+// Contadores
+const cuenta = el => { const fin = +el.dataset.n, t0 = performance.now(); const f = t => { const p = Math.min(1, (t - t0) / 1200); el.textContent = Math.round(fin * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(f); }; requestAnimationFrame(f); };
+const io2 = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { cuenta(e.target); io2.unobserve(e.target); } }), { threshold: .5 });
+document.querySelectorAll("[data-n]").forEach(el => io2.observe(el));
+// Calculadora de ahorro
+const $ = id => document.getElementById(id), fmt = n => "Bs " + Math.round(n).toLocaleString("es-BO");
+function calc() {
+  const v = +$("rv").value, c = +$("rc").value || 0, p = +$("rp").value || 0, a = +$("ra").value || 0, b = +$("rb").value || 0;
+  const comb = v * c * p / 100, aver = v / 10 * a * b / 12, plan = v <= 5 ? ["Básico", 99] : v <= 50 ? ["Flota", 249] : ["Empresa", 499];
+  $("cv").textContent = v; $("rf").textContent = fmt(comb); $("rm").textContent = fmt(aver); $("rt").textContent = fmt(comb + aver);
+  $("rpn").textContent = plan[0]; $("rpl").textContent = fmt(plan[1]); $("rx").textContent = Math.round((comb + aver) / plan[1]) + "×";
+}
+["rv", "rc", "rp", "ra", "rb"].forEach(id => $(id).oninput = calc); calc();
 // Registro de empresa (prueba gratis). Si el registro está cerrado en el servidor, se oculta la sección.
-fetch("/api/registro").then(r => r.json()).then(j => { if (j && j.abierto === false) document.getElementById("registro").style.display = "none"; }).catch(() => {});
-const v = id => document.getElementById(id).value.trim();
-document.getElementById("regForm").onsubmit = async e => {
-  e.preventDefault(); const err = document.getElementById("rErr"), btn = document.getElementById("rBtn"); err.textContent = ""; btn.disabled = true;
+fetch("/api/registro").then(r => r.json()).then(j => { if (j && j.abierto === false) $("registro").style.display = "none"; }).catch(() => {});
+const v = id => $(id).value.trim();
+$("regForm").onsubmit = async e => {
+  e.preventDefault(); const err = $("rErr"), btn = $("rBtn"); err.textContent = ""; btn.disabled = true;
   try {
-    const r = await fetch("/api/registro", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ empresa: v("rEmp"), nombre: v("rNom"), pais: v("rPais"), telefono: v("rTel"), email: v("rMail"), usuario: v("rUser"), password: document.getElementById("rPass").value }) });
+    const r = await fetch("/api/registro", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ empresa: v("rEmp"), nombre: v("rNom"), pais: v("rPais"), telefono: v("rTel"), email: v("rMail"), usuario: v("rUser"), password: $("rPass").value }) });
     const j = await r.json(); if (!j.ok) throw new Error(j.error || "No se pudo crear la cuenta");
     try { localStorage.setItem("ag-token", j.token); } catch (x) {}
     btn.textContent = "¡Cuenta creada! Entrando…"; location.href = "/";
