@@ -302,18 +302,20 @@ const norm=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase(
 async function nuevoProv(tp,nombre){ try{ const r=await api("proveedores",{body:{tipo:tp,nombre}}); const p={id:r.id,tipo:tp,nombre,telefono:"",nota:"",activo:1,usos:0}; PROV.push(p); ls.set("ag-prov-"+USER.id,JSON.stringify(PROV)); toast("Agregado a la lista de proveedores"); return p; }
   catch(e){ toast(e.message); return null; } }
 // Campo con lista desplegable y buscador. Si la lista tiene elementos solo se puede elegir uno de ellos; si está vacía es texto libre.
-const comboHTML=(id,label,hay,ph)=>`<div class="field"><label>${label}</label><div class="combo"><input id="${id}" autocomplete="off" placeholder="${hay?"Busca y elige de la lista":esc(ph||"")}"><div class="opts hidden" id="${id}L"></div></div></div>`;
-function combo(B,id,items,o={}){ const inp=B.querySelector("#"+id), box=B.querySelector("#"+id+"L"); let sel=null, idx=-1, lista=[];
+const comboHTML=(id,label,hay,ph)=>`<div class="field"><label>${label}</label><div class="combo"><input id="${id}" autocomplete="off" placeholder="${hay?"Busca y elige de la lista":esc(ph||"")}"><div class="opts hidden" id="${id}L"></div></div><small class="muted" id="${id}H"></small></div>`;
+function combo(B,id,items,o={}){ const inp=B.querySelector("#"+id), box=B.querySelector("#"+id+"L"), hint=B.querySelector("#"+id+"H"); let sel=null, idx=-1, lista=[];
+  const pista=()=>{ if(!hint) return; const pl=(o.plural||"proveedores").toLowerCase(); hint.textContent=items.length?"":o.nuevo?`La lista de ${pl} está vacía: escribe el nombre y elige «+ Agregar» para guardarlo. Desde entonces solo se podrá elegir de la lista.`:`Aún no hay ${pl} en la lista; escribe el nombre. Pide al jefe de flota que cargue la lista en Proveedores.`; };
+  pista();
   const set=p=>{ sel=p; if(p) inp.value=p.nombre; inp.dataset.id=p?p.id:""; };
   const marcar=()=>inp.classList.toggle("bad",items.length>0&&!!inp.value.trim()&&!inp.dataset.id&&inp.value.trim()!==(o.valor||""));
   const cerrar=()=>{ box.classList.add("hidden"); idx=-1; };
   const elegir=p=>{ set(p); cerrar(); marcar(); };
-  const abrir=()=>{ if(!items.length) return; const q=norm(inp.value); lista=items.filter(p=>!q||norm(p.nombre).includes(q)).slice(0,40); const exacto=items.some(p=>norm(p.nombre)===q);
+  const abrir=()=>{ if(!items.length&&!o.nuevo) return; const q=norm(inp.value); lista=items.filter(p=>!q||norm(p.nombre).includes(q)).slice(0,40); const exacto=items.some(p=>norm(p.nombre)===q);
     box.innerHTML=lista.map((p,i)=>`<div class="opt${i===idx?" act":""}" data-i="${i}">${esc(p.nombre)}${p.telefono?`<small>${esc(p.telefono)}</small>`:""}</div>`).join("")
       +(lista.length?"":'<div class="opt muted">No hay coincidencias</div>')+(o.nuevo&&q&&!exacto?`<div class="opt add" data-add="1">+ Agregar «${esc(inp.value.trim())}»</div>`:"");
     box.classList.remove("hidden"); box.querySelector(".opt.act")?.scrollIntoView({block:"nearest"});
     box.querySelectorAll(".opt[data-i]").forEach(el=>el.onpointerdown=ev=>{ ev.preventDefault(); elegir(lista[+el.dataset.i]); });
-    const a=box.querySelector("[data-add]"); if(a) a.onpointerdown=async ev=>{ ev.preventDefault(); cerrar(); const p=await o.nuevo(inp.value.trim()); if(p){ items.push(p); elegir(p); } }; };
+    const a=box.querySelector("[data-add]"); if(a) a.onpointerdown=async ev=>{ ev.preventDefault(); cerrar(); const p=await o.nuevo(inp.value.trim()); if(p){ items.push(p); pista(); elegir(p); } }; };
   inp.oninput=()=>{ sel=null; inp.dataset.id=""; inp.classList.remove("bad"); idx=-1; abrir(); };
   inp.onfocus=abrir; inp.onblur=()=>{ cerrar(); if(!sel){ const m=items.find(p=>norm(p.nombre)===norm(inp.value)); if(m) set(m); } marcar(); };
   inp.onkeydown=ev=>{ if(ev.key==="ArrowDown"){ idx=Math.min(idx+1,Math.max(lista.length-1,0)); abrir(); ev.preventDefault(); }
@@ -409,7 +411,7 @@ async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.est
       gasto:`<div class="row"><div class="field"><label>Tipo de gasto</label><select id="fc"><option>Peaje</option><option>Repuesto</option><option>Llantas</option><option>Multa</option><option>Seguro / SOAT</option><option>Parqueo</option><option>Otro</option></select></div>${mon(1)}${fecha}</div>
         <div class="row">${km}${prov("Proveedor","")}</div>${det}${fotoCampo("f1","Foto del comprobante")}`,
       kilometraje:`<div class="row">${km}${fecha}</div>${det}${fotoCampo("f1","Foto del odómetro (opcional)")}`})[tipo];
-    CB=$("fp")?combo($("rform"),"fp",provDe(tp),{etiq:ETIQ_PROV[tp][2],nuevo:puedeProv()?n=>nuevoProv(tp,n):null}):null;
+    CB=$("fp")?combo($("rform"),"fp",provDe(tp),{etiq:ETIQ_PROV[tp][2],plural:ETIQ_PROV[tp][1],nuevo:puedeProv()?n=>nuevoProv(tp,n):null}):null;
     f1=f2=null; if($("f1")) enlazarFoto($("rform"),"f1",d=>f1=d); if($("f2")) enlazarFoto($("rform"),"f2",d=>f2=d); };
   $("rv").onchange=form; $("rtip").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{ tipo=b.dataset.t; form(); });
   $("rsc").onclick=()=>scan({titulo:"Escanear QR del vehículo",onCode:c=>{ const m=String(c).match(/#v=([a-f0-9]+)/i)||[null,c]; const v=act.find(x=>x.codigo===String(m[1]).toLowerCase()); if(!v) return "⚠️ No es un vehículo de tu flota"; $("rv").value=v.id; form(); return "✓ "+v.placa; }});
@@ -527,7 +529,7 @@ async function viewHistorial(){ await cargarVeh(); await cargarProv(); const pre
       <p class="muted">Al guardar se recalculan el kilometraje actual del vehículo, el rendimiento de las cargas y la fecha del último mantenimiento.</p>
       <div class="err" id="ee"></div><div class="acts"><button class="sec" id="ex">Cancelar</button><button id="eok">Guardar</button></div>`, B=>{
       B.querySelector("#ex").onclick=()=>detalleEvento(e);
-      const tp=TIPO_PROV[t], CB=B.querySelector("#ep")?combo(B,"ep",provDe(tp),{valor:e.proveedor||"",etiq:ETIQ_PROV[tp][2],nuevo:puedeProv()?n=>nuevoProv(tp,n):null}):null;
+      const tp=TIPO_PROV[t], CB=B.querySelector("#ep")?combo(B,"ep",provDe(tp),{valor:e.proveedor||"",etiq:ETIQ_PROV[tp][2],plural:ETIQ_PROV[tp][1],nuevo:puedeProv()?n=>nuevoProv(tp,n):null}):null;
       B.querySelector("#eok").onclick=async()=>{ const pv=CB?CB.get():{proveedor:""}; if(pv.error) return B.querySelector("#ee").textContent=pv.error;
         try{ await api("eventos",{body:{id:e.id,editar:true,km:val(B,"#ek").replace(",","."),litros:val(B,"#el").replace(",","."),monto:val(B,"#em").replace(",","."),lleno:B.querySelector("#ell")?B.querySelector("#ell").checked:true,fecha:val(B,"#ef"),proveedor:pv.proveedor,proveedor_id:pv.proveedor_id||null,categoria:val(B,"#ec"),detalle:val(B,"#ed")}});
         closeDlg(); toast("Registro corregido"); load(); }catch(x){ B.querySelector("#ee").textContent=x.message; } }; }); };
