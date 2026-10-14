@@ -198,15 +198,18 @@ async function viewSucursales(){ ALLSUCS=(await api("m/sucursales")).items;
 
 // ===================== Usuarios =====================
 const PRESETS={Administrador:["registrar","mantenimiento","vehiculos","reportes","sucursales","usuarios"],"Jefe de flota":["registrar","mantenimiento","vehiculos","reportes"],"Conductor":["registrar"]};
-async function viewUsuarios(){ const j=await api("usuarios"); ALLSUCS=(await api("m/sucursales")).items;
-  $("main").innerHTML=`<h2>Usuarios y permisos</h2><div class="toolbar"><button id="unew">+ Nuevo usuario</button></div><div class="card tbl"><table><thead><tr><th>Nombre</th><th>Usuario</th><th>Parqueos</th><th>Permisos</th><th>Estado</th></tr></thead><tbody>
-    ${j.usuarios.map(u=>`<tr class="click" data-id="${u.id}"><td>${esc(u.nombre)}</td><td>${esc(u.usuario)}</td><td><small>${u.sucursales.length?u.sucursales.map(sucName).map(esc).join(", "):"Todas"}</small></td>
+async function viewUsuarios(){ const j=await api("usuarios"); ALLSUCS=(await api("m/sucursales")).items; await cargarCond(); await cargarVeh();
+  $("main").innerHTML=`<h2>Usuarios y permisos</h2><div class="toolbar"><button id="unew">+ Nuevo usuario</button></div><p class="muted">A cada chofer puedes enlazarle su ficha de conductor y un vehículo predeterminado: al abrir Registrar ya salen elegidos.</p><div class="card tbl"><table><thead><tr><th>Nombre</th><th>Usuario</th><th>Conductor / vehículo</th><th>Parqueos</th><th>Permisos</th><th>Estado</th></tr></thead><tbody>
+    ${j.usuarios.map(u=>`<tr class="click" data-id="${u.id}"><td>${esc(u.nombre)}</td><td>${esc(u.usuario)}</td><td><small>${u.conductor?"👤 "+esc(u.conductor):""}${u.conductor&&u.placa?" · ":""}${u.placa?"🚚 "+esc(u.placa):""}</small></td><td><small>${u.sucursales.length?u.sucursales.map(sucName).map(esc).join(", "):"Todas"}</small></td>
       <td>${u.permisos.map(p=>`<span class="chip">${esc(j.permisos[p]||p)}</span>`).join(" ")}</td><td>${u.activo?'<span class="chip ok">Activo</span>':'<span class="chip bad">Inactivo</span>'}</td></tr>`).join("")}</tbody></table></div>`;
   $("unew").onclick=()=>userForm(null,j.permisos); document.querySelectorAll("#main tr[data-id]").forEach(tr=>tr.onclick=()=>userForm(j.usuarios.find(u=>u.id==tr.dataset.id),j.permisos)); }
 function userForm(u,P){ const perms=new Set(u?u.permisos:PRESETS.Conductor), sucs=new Set(u?u.sucursales:[]);
   dialog(`<h3>${u?"Editar usuario":"Nuevo usuario"}</h3><div class="row"><div class="field"><label>Nombre</label><input id="un" value="${esc(u?.nombre||"")}"></div>
     <div class="field"><label>Usuario (único en toda la plataforma)</label><input id="uu" value="${esc(u?.usuario||"")}" ${u?"disabled":""} autocapitalize="none" placeholder="ej: ana.${esc(EMP.slug)}"></div></div>
     <div class="field"><label>${u?"Nueva contraseña (vacía = no cambia)":"Contraseña (mínimo 8)"}</label><input id="up" type="password" autocomplete="new-password"></div>
+    <div class="row"><div class="field"><label>Ficha de conductor</label><select id="uc"><option value="">Sin ficha de conductor</option><option value="nuevo">➕ Crear ficha con este nombre</option>${COND.filter(c=>c.activo||c.id===u?.conductor_id).map(c=>`<option value="${c.id}" ${c.id===u?.conductor_id?"selected":""}>${esc(c.nombre)}</option>`).join("")}</select></div>
+      <div class="field"><label>Vehículo predeterminado</label><select id="uv"><option value="">Ninguno (elige al registrar)</option>${VEH.filter(v=>v.estado!=="baja"||v.id===u?.vehiculo_id).map(v=>`<option value="${v.id}" ${v.id===u?.vehiculo_id?"selected":""}>${esc(v.placa)} · ${esc(v.marca)} ${esc(v.modelo)}${v.conductor?" · "+esc(v.conductor):""}</option>`).join("")}</select></div></div>
+    <p class="muted" style="margin-top:-6px">Con la ficha, cada registro guarda que este usuario manejaba. Con el vehículo, Registrar se abre con ese vehículo elegido.</p>
     <label>Parqueos a los que tiene acceso</label><div class="perms" style="margin-bottom:12px">${ALLSUCS.filter(s=>s.activo).map(s=>`<label class="check"><input type="checkbox" data-suc="${s.id}" ${sucs.has(s.id)?"checked":""}> ${esc(s.nombre)}</label>`).join("")}</div>
     <p class="muted" style="margin-top:-6px">Si no marcas ninguna, tiene acceso a todas.</p>
     <label>Permisos</label><div class="preset">${Object.keys(PRESETS).map(k=>`<button class="sec" data-pre="${esc(k)}">${esc(k)}</button>`).join("")}</div>
@@ -216,7 +219,7 @@ function userForm(u,P){ const perms=new Set(u?u.permisos:PRESETS.Conductor), suc
     b.querySelectorAll("[data-pre]").forEach(x=>x.onclick=()=>{ const s=PRESETS[x.dataset.pre]; b.querySelectorAll("[data-perm]").forEach(c=>c.checked=s.includes(c.dataset.perm)); });
     b.querySelector("#ux").onclick=closeDlg;
     b.querySelector("#uok").onclick=async()=>{ b.querySelector("#uerr").textContent="";
-      const body={nombre:val(b,"#un"),permisos:[...b.querySelectorAll("[data-perm]:checked")].map(c=>c.dataset.perm),sucursales:[...b.querySelectorAll("[data-suc]:checked")].map(c=>+c.dataset.suc)};
+      const body={nombre:val(b,"#un"),permisos:[...b.querySelectorAll("[data-perm]:checked")].map(c=>c.dataset.perm),sucursales:[...b.querySelectorAll("[data-suc]:checked")].map(c=>+c.dataset.suc),conductor_id:val(b,"#uc"),vehiculo_id:val(b,"#uv")};
       const pw=val(b,"#up"); if(pw) body.password=pw; if(u){ body.id=u.id; body.activo=b.querySelector("#ua").checked; } else body.usuario=val(b,"#uu");
       try{ await api("usuarios",{body}); closeDlg(); toast("Usuario guardado"); go("usuarios"); }catch(e){ b.querySelector("#uerr").textContent=e.message; } }; }); }
 
@@ -424,7 +427,8 @@ async function viewPanel(){ const admin=can("reportes"); let par=PRESEL?.panel_s
       chartBarras($("gVeh"),G.top_vehiculos||[],{color:pal(2),sub:x=>x.km>0?` · ${fmtKm(x.km)} · ${money(x.total/x.km)}/km`:""});
       chartBarras($("gTrab"),G.trabajos||[],{color:pal(1),sub:x=>` · ${x.n} vez${x.n>1?"es":""}`});
     } else {
-      $("dout").innerHTML=`<div class="pgrid" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr));margin-bottom:12px">${j.vehiculos.map(v=>{ const ps=j.planificados.filter(x=>x.vehiculo_id===v.id&&x.estado!=="ok"&&x.estado!=="sin_registro");
+      const mios=[...j.vehiculos].sort((a,b)=>(b.id===USER.vehiculo_id)-(a.id===USER.vehiculo_id)); // el vehículo del usuario primero
+      $("dout").innerHTML=`<div class="pgrid" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr));margin-bottom:12px">${mios.map(v=>{ const ps=j.planificados.filter(x=>x.vehiculo_id===v.id&&x.estado!=="ok"&&x.estado!=="sin_registro");
         return `<div class="card" style="padding:12px"><b style="font-size:1.2rem">${esc(v.placa)}</b> <span class="chip ${ps.some(x=>x.estado==="vencido")?"bad":ps.length?"warn":"ok"}">${ps.some(x=>x.estado==="vencido")?"Mantenimiento vencido":ps.length?"Mantenimiento próximo":"Al día"}</span>
           <div class="muted">${esc([v.marca,v.modelo].filter(Boolean).join(" "))}${SUCS.length>1?" · "+esc(v.sucursal):""}</div><div>${fmtKm(v.km_actual)}</div>${can("registrar")?`<button class="sec" data-rv="${v.id}" style="margin-top:8px">➕ Registrar</button>`:""}</div>`; }).join("")||'<p class="muted">No hay vehículos en tus parqueos.</p>'}</div>
         ${tablaPlan}<div style="margin-top:12px">${tablaRea}</div>${docs}${repCard}`;
@@ -452,7 +456,8 @@ function escanearVeh(){ scan({titulo:"Escanear QR del vehículo",onCode:c=>{ con
 
 // ===================== Registrar =====================
 async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.estado!=="baja");
-  const pre=PRESEL||{}; PRESEL=null; let tipo=pre.tipo||"combustible", vid=pre.vehiculo_id||(act.length===1?act[0].id:null), f1=null, f2=null, CB=null;
+  const pre=PRESEL||{}; PRESEL=null; const mio=act.find(v=>v.id===USER.vehiculo_id)||(USER.conductor_id?act.find(v=>v.conductor_id===USER.conductor_id):null); // vehículo predeterminado del usuario
+  let tipo=pre.tipo||"combustible", vid=pre.vehiculo_id||mio?.id||(act.length===1?act[0].id:null), f1=null, f2=null, CB=null;
   await cargarProv(); await cargarCond();
   const tipos=Object.keys(TIPOS_EV).filter(t=>t==="mantenimiento"?can("mantenimiento"):can("registrar"));
   if(!tipos.includes(tipo)) tipo=tipos[0];
@@ -468,7 +473,7 @@ async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.est
     const km=`<div class="field"><label>Kilometraje (odómetro)${["combustible","kilometraje"].includes(tipo)?" *":""}</label><input id="fk" inputmode="numeric" placeholder="${v?Math.round(v.km_actual):""}"></div>`;
     const fecha=`<div class="field"><label>Fecha</label><input type="date" id="ff" value="${today()}" max="${today()}"></div>`;
     const tp=TIPO_PROV[tipo], prov=(l,ph)=>comboHTML("fp",l,provDe(tp).length,ph), det=`<div class="field"><label>Detalle</label><input id="fd"></div>`;
-    const fac=`<div class="field"><label>N° de factura</label><input id="ffa" placeholder="Opcional"></div>`, cond=`<div class="field"><label>Conductor (quién manejaba)</label>${selCond("fco",v?.conductor_id||null)}</div>`;
+    const fac=`<div class="field"><label>N° de factura</label><input id="ffa" placeholder="Opcional"></div>`, cond=`<div class="field"><label>Conductor (quién manejaba)</label>${selCond("fco",USER.conductor_id||v?.conductor_id||null)}</div>`;
     const mon=r=>`<div class="field"><label>Monto (${esc(EMP.moneda)})${r?" *":""}</label><input id="fm" inputmode="decimal"></div>`;
     const planes=v?v.planes:[];
     $("rform").innerHTML=({

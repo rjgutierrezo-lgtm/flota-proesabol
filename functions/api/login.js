@@ -1,8 +1,9 @@
 // POST: iniciar sesión | GET: datos de la sesión | DELETE: cerrar sesión
 import { json, err, txt, hashPass, randomHex, sameStr, sesion, bloqueo, aviso, limites, misSucursales, PERFIL_EMPRESA, ITER, intentosBloqueado, intentoFallido, intentosLimpiar } from "../../lib/db.js";
 async function perfil(env, u) {
-  const out = { id: u.id, usuario: u.usuario, nombre: u.nombre, super: !!u.super, permisos: u.super ? [] : u.permisos };
+  const out = { id: u.id, usuario: u.usuario, nombre: u.nombre, super: !!u.super, permisos: u.super ? [] : u.permisos, conductor_id: u.conductor_id || null, vehiculo_id: u.vehiculo_id || null };
   if (!u.super) {
+    if (u.conductor_id) out.conductor = (await env.DB.prepare("SELECT nombre FROM conductores WHERE id = ? AND empresa_id = ?").bind(u.conductor_id, u.empresa_id).first())?.nombre || null;
     out.empresa = await env.DB.prepare(PERFIL_EMPRESA).bind(u.empresa_id).first();
     out.aviso = aviso(out.empresa); out.plan = await limites(env, u.empresa_id);
     out.sucursales = await misSucursales(env, { ...u, sucursales: Array.isArray(u.sucursales) ? u.sucursales : JSON.parse(u.sucursales || "[]") });

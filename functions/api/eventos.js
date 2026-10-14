@@ -75,7 +75,7 @@ export async function onRequestPost({ request, env }) {
   if (v.estado === "baja") return err("Ese vehículo está dado de baja");
   if (u.foto_obligatoria && ["combustible", "mantenimiento"].includes(tipo) && !b.foto1) return err("Tu empresa exige la foto de la factura en este registro. Tómala o elige el archivo antes de guardar.");
   const c = validar(tipo, b, v); if (c.error) return err(c.error);
-  let cid = v.conductor_id; // quién manejaba: por defecto el conductor asignado al vehículo
+  let cid = u.conductor_id || v.conductor_id; // quién manejaba: el conductor enlazado al usuario, o el asignado al vehículo
   if (b.conductor_id !== undefined && b.conductor_id !== null) { const x = int(b.conductor_id) || null; cid = !x ? null : (await env.DB.prepare("SELECT 1 FROM conductores WHERE id = ? AND empresa_id = ?").bind(x, E(u)).first()) ? x : v.conductor_id; }
   const pr = await resolverProveedor(env, E(u), tipo, b); if (pr.error) return err(pr.error); c.proveedor = pr.nombre;
   const { km, litros, monto, lleno, alertas } = c;
