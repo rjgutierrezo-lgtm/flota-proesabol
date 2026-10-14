@@ -105,6 +105,7 @@ async function viewPlataforma(){ PLAT=await api("plataforma"); const E=PLAT.empr
     <div class="card kpi"><div class="v num">Bs ${fmtN(mrr,0)}</div><div class="l">Ingreso mensual esperado</div></div>
     <div class="card kpi"><div class="v num">Bs ${fmtN(PLAT.cobrado_mes.total,0)}</div><div class="l">Cobrado este mes (${PLAT.cobrado_mes.n} pagos)</div></div>
     <div class="card kpi"><div class="v" style="color:${porCobrar.length?"var(--warn)":"inherit"}">${porCobrar.length}</div><div class="l">Por cobrar (vencen en 7 días o vencidas)</div></div></div>
+    <div class="card" id="almac" style="margin-bottom:12px"><div class="toolbar" style="justify-content:space-between;margin:0"><h3 style="margin:0">💾 Almacenamiento en Cloudflare</h3><button class="sec" id="almBtn" onclick="almacenamiento()">Calcular ahora</button></div><div id="almOut"><p class="muted">Fotos en R2 y datos en D1, por empresa. Pulsa "Calcular ahora" (recorre todas las fotos, tarda unos segundos).</p></div></div>
     <div class="toolbar"><button id="enew">+ Nueva empresa</button></div>
     <div class="card tbl"><table><thead><tr><th>Empresa</th><th>Plan</th><th class="n">Precio</th><th>Vence</th><th>Estado</th><th>Uso</th><th class="n">Registros 30d</th><th></th></tr></thead><tbody>
     ${E.map(e=>{ const [t,c]=estadoEmp(e), L=PLAT.planes[e.plan||"basico"]; return `<tr class="click" data-id="${e.id}"><td><b>${esc(e.nombre)}</b><br><small class="muted">${esc(e.admins||"")}</small></td>
@@ -167,6 +168,17 @@ async function empresaForm(e){
           max_sucursales:val(b,"#ls"),max_usuarios:val(b,"#lu"),max_vehiculos:val(b,"#lv")}}); closeDlg(); toast("Empresa actualizada"); go("plataforma"); }catch(x){ errEl.textContent=x.message; } };
     b.querySelector("#erst").onclick=async()=>{ errEl.textContent="";
       try{ await api("plataforma",{body:{id:e.id,reset_usuario:val(b,"#ru"),reset_password:val(b,"#rp")}}); toast("Contraseña restablecida"); b.querySelector("#rp").value=""; }catch(x){ errEl.textContent=x.message; } }; }); }
+// Uso de almacenamiento (R2 y D1) para el dueño de la plataforma
+const fmtB=b=>b>=1024**3?fmtN(b/1024**3,2)+" GB":b>=1024**2?fmtN(b/1024**2,1)+" MB":fmtN(b/1024,0)+" KB";
+async function almacenamiento(){ const out=$("almOut"), btn=$("almBtn"); if(!out) return; btn.disabled=true; out.innerHTML='<p class="muted">Recorriendo las fotos…</p>';
+  try{ const j=await api("plataforma?almacenamiento=1");
+    const barra=(usado,total,titulo,nota)=>{ const p=usado/total*100, col=p>=90?"var(--bad)":p>=70?"var(--warn)":"var(--accent)"; return `<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;gap:8px"><b>${titulo}</b><span class="num">${fmtB(usado)} de ${fmtB(total)} gratis · <b style="color:${col}">${p<1?fmtN(p,2):Math.round(p)}%</b></span></div><div style="background:var(--bg);border-radius:6px;height:12px;overflow:hidden"><div style="height:100%;width:${Math.max(.5,Math.min(100,p))}%;background:${col}"></div></div><small class="muted">${nota}</small></div>`; };
+    out.innerHTML=`${j.r2?barra(j.r2.bytes,j.gratis.r2_bytes,"Fotos en R2 (bucket flota-fotos)",`${fmtQ(j.r2.objetos)} fotos${j.r2.completo?"":" (más de 100.000 objetos: cuenta parcial)"} · sin borrado automático`):'<p class="err">R2 no está conectado: las fotos se guardan en la base de datos.</p>'}
+      ${barra(j.d1.fotos_bytes,j.gratis.d1_bytes,"Fotos en la base D1 (antiguas)",`${fmtQ(j.d1.fotos)} fotos guardadas antes de conectar R2 · ${fmtQ(j.d1.registros)} registros en total`)}
+      <div class="tbl" style="margin-top:10px"><table><thead><tr><th>Empresa</th><th class="n">Fotos R2</th><th class="n">Espacio R2</th><th class="n">Fotos D1</th><th class="n">Espacio D1</th><th class="n">Registros</th></tr></thead><tbody>
+      ${j.empresas.map(e=>`<tr><td><b>${esc(e.nombre)}</b></td><td class="n">${fmtQ(e.r2_objetos)}</td><td class="n">${fmtB(e.r2_bytes)}</td><td class="n">${fmtQ(e.d1_fotos)}</td><td class="n">${fmtB(e.d1_bytes)}</td><td class="n">${fmtQ(e.registros)}</td></tr>`).join("")||'<tr><td colspan="6" class="muted">Sin datos todavía.</td></tr>'}</tbody></table></div>
+      <p class="muted" style="margin-top:8px">Límites del plan gratuito de Cloudflare: 10 GB en R2 y 500 MB por base en D1. Calculado el ${new Date().toLocaleString("es-BO")}.</p>`; }
+  catch(e){ out.innerHTML=`<p class="err">${esc(e.message)}</p>`; } btn.disabled=false; }
 function sumarDiasLocal(n){ return daysAgo(-n); }
 function sumarMesesLocal(f,m){ const x=new Date(f+"T12:00:00Z"), d=x.getUTCDate(); x.setUTCDate(1); x.setUTCMonth(x.getUTCMonth()+m); const fin=new Date(Date.UTC(x.getUTCFullYear(),x.getUTCMonth()+1,0)).getUTCDate(); x.setUTCDate(Math.min(d,fin)); return x.toISOString().slice(0,10); }
 

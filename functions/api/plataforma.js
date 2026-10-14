@@ -9,6 +9,19 @@ export async function onRequestGet({ request, env }) {
   const u = await sesion(request, env); if (!u?.super) return err("Solo el dueño de la plataforma", 403);
   const q = new URL(request.url).searchParams;
   if (q.get("pagos")) { const { results } = await env.DB.prepare("SELECT * FROM pagos WHERE empresa_id = ? ORDER BY fecha DESC").bind(int(q.get("pagos"))).all(); return json({ ok: true, pagos: results }); }
+  if (q.get("almacenamiento")) { // uso de R2 (fotos) y de D1 por empresa. R2 se recorre objeto por objeto (máximo 100 páginas de 1000)
+    const emp = Object.fromEntries((await env.DB.prepare("SELECT id, nombre FROM empresas").all()).results.map(e => [e.id, e.nombre]));
+    const por = {}; const add = (id, k, n) => { por[id] = por[id] || { empresa_id: +id || 0, nombre: emp[id] || "(sin empresa)", r2_objetos: 0, r2_bytes: 0, d1_fotos: 0, d1_bytes: 0, registros: 0 }; por[id][k] += n; };
+    let r2 = null;
+    if (env.FOTOS) { r2 = { objetos: 0, bytes: 0, completo: true }; let cursor; for (let i = 0; i < 100; i++) {
+        const l = await env.FOTOS.list({ cursor, limit: 1000 }); for (const o of l.objects) { r2.objetos++; r2.bytes += o.size; const id = o.key.split("/")[0]; add(id, "r2_objetos", 1); add(id, "r2_bytes", o.size); }
+        if (!l.truncated) break; cursor = l.cursor; if (i === 99) r2.completo = false; } }
+    const f = await env.DB.prepare("SELECT empresa_id, COUNT(*) AS n, COALESCE(SUM(length(data)), 0) AS bytes FROM fotos GROUP BY empresa_id").all();
+    for (const x of f.results) { add(x.empresa_id, "d1_fotos", x.n); add(x.empresa_id, "d1_bytes", x.bytes); }
+    const ev = await env.DB.prepare("SELECT empresa_id, COUNT(*) AS n FROM eventos GROUP BY empresa_id").all(); for (const x of ev.results) add(x.empresa_id, "registros", x.n);
+    const d1 = { fotos: f.results.reduce((a, x) => a + x.n, 0), fotos_bytes: f.results.reduce((a, x) => a + x.bytes, 0), registros: ev.results.reduce((a, x) => a + x.n, 0) };
+    return json({ ok: true, r2, d1, empresas: Object.values(por).sort((a, b) => (b.r2_bytes + b.d1_bytes) - (a.r2_bytes + a.d1_bytes)), gratis: { r2_bytes: 10 * 1024 ** 3, d1_bytes: 500 * 1024 ** 2 } });
+  }
   const mes = hoy().slice(0, 7);
   const { results } = await env.DB.prepare(`SELECT e.*,
       (SELECT COUNT(*) FROM usuarios x WHERE x.empresa_id = e.id AND x.activo = 1) AS usuarios,
