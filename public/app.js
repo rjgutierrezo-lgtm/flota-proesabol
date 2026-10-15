@@ -51,7 +51,7 @@ async function doLogin(){ $("lgErr").textContent=""; $("lgBtn").disabled=true;
   try{ const j=await api("login",{body:{usuario:$("lgUser").value,password:$("lgPass").value}}); TOKEN=j.token; ls.set("ag-token",TOKEN); ls.set("ag-user",JSON.stringify(j.usuario)); $("lgPass").value=""; setUser(j.usuario); startApp(); }
   catch(e){ $("lgErr").textContent=e.message; } $("lgBtn").disabled=false; }
 $("lgForm").onsubmit=e=>{ e.preventDefault(); doLogin(); };
-function logoutLocal(){ endTour(); TOKEN=null; USER=null; ls.del("ag-token"); ls.del("ag-user"); pintarCola(); show("vLogin"); }
+function logoutLocal(){ endTour(); TOKEN=null; USER=null; ls.del("ag-token"); ls.del("ag-user"); pintarCola(); const b=$("bnav"); if(b) b.remove(); show("vLogin"); }
 $("logout").onclick=async()=>{ try{ await api("login",{method:"DELETE"}); }catch(e){} logoutLocal(); };
 
 // ===================== Navegación =====================
@@ -77,7 +77,7 @@ async function startApp(){ show("vApp"); $("who").textContent=USER.nombre;
   if(!USER.super){ try{ ALLSUCS=(await api("m/sucursales")).items; }catch(e){ ALLSUCS=SUCS; } }
   drawSucSel(); drawAviso();
   const vs=VIEWS.filter(v=>v.ok()); $("nav").innerHTML=vs.map(v=>`<button data-v="${v.id}">${v.t}</button>`).join("");
-  $("nav").querySelectorAll("button").forEach(b=>b.onclick=()=>go(b.dataset.v));
+  $("nav").querySelectorAll("button").forEach(b=>b.onclick=()=>go(b.dataset.v)); drawBnav(vs);
   if(!vs.length){ $("main").innerHTML=`<div class="card">Tu usuario no tiene permisos asignados. Pide al administrador que te los active.</div>`; return; }
   if(!USER.super&&!SUCS.length){ $("main").innerHTML=`<div class="card">Tu usuario no tiene sucursales asignadas o no hay sucursales activas.</div>`; }
   const hv=location.hash.match(/^#v=([a-f0-9]+)/i);
@@ -85,12 +85,25 @@ async function startApp(){ show("vApp"); $("who").textContent=USER.nombre;
   pintarCola(); enviarCola();
   if(OFFLINE){ OFFLINE=false; toast("Sin conexión: puedes registrar y se enviará cuando vuelva la señal"); if(vs.some(v=>v.id==="registrar")) return go("registrar"); }
   go(vs[0].id); }
+// Menú inferior para el teléfono: las 4 secciones principales y "Más" con el resto
+const BNAV_ICON={plataforma:"🏢",panel:"🏠",registrar:"➕",vehiculos:"🚚",mantenimiento:"🔧",historial:"🧾",reportes:"📊",conductores:"👤",proveedores:"🏪",repuestos:"📦",sucursales:"📍",usuarios:"👥",config:"⚙️"};
+let BNAV_MAIN=[];
+function drawBnav(vs){ let b=$("bnav"); if(!b){ b=document.createElement("nav"); b.id="bnav"; b.setAttribute("aria-label","Menú"); document.body.appendChild(b); }
+  const pri=["panel","registrar","vehiculos","historial","plataforma"], main=pri.map(id=>vs.find(v=>v.id===id)).filter(Boolean).slice(0,4), rest=vs.filter(v=>!main.includes(v)); BNAV_MAIN=main.map(v=>v.id);
+  b.innerHTML=main.map(v=>`<button data-v="${v.id}"><span class="i">${BNAV_ICON[v.id]||"•"}</span><span>${v.t}</span></button>`).join("")+`<button data-more="1"><span class="i">☰</span><span>Más</span></button>`;
+  b.querySelectorAll("[data-v]").forEach(x=>x.onclick=()=>go(x.dataset.v));
+  b.querySelector("[data-more]").onclick=()=>dialog(`<h3>Más</h3><div class="mas">${rest.map(v=>`<button class="sec" data-v="${v.id}"><span class="i">${BNAV_ICON[v.id]||"•"}</span>${esc(v.t)}</button>`).join("")}
+      <button class="sec" id="masHelp"><span class="i">❓</span>Ayuda de esta pantalla</button><button class="sec" id="masClose"><span class="i">✕</span>Cerrar</button>
+      <div class="full muted" style="padding:6px 2px 0;font-size:.9rem">${esc(USER.nombre)}${EMP?` · ${esc(EMP.nombre)}`:""}</div><button class="danger full" id="masOut">🚪 Cerrar sesión</button></div>`, B=>{
+    B.querySelectorAll("[data-v]").forEach(x=>x.onclick=()=>{ closeDlg(); go(x.dataset.v); }); B.querySelector("#masClose").onclick=closeDlg;
+    B.querySelector("#masHelp").onclick=()=>{ closeDlg(); startTour(CUR,true); }; B.querySelector("#masOut").onclick=()=>{ closeDlg(); $("logout").click(); }; }); }
 function drawAviso(){ let a=$("aviso"); if(!a){ a=document.createElement("div"); a.id="aviso"; $("main").before(a); }
   const v=USER.aviso; a.innerHTML=v?`<div style="max-width:1200px;margin:12px auto 0;padding:0 16px"><div class="card" style="border-color:var(--${v.nivel});background:var(--${v.nivel}-soft);color:var(--${v.nivel});font-weight:600">${v.nivel==="bad"?"⛔":"⚠️"} ${esc(v.texto)}</div></div>`:""; }
 function drawSucSel(){ const w=$("sucWrap"); if(USER.super||!SUCS.length){ w.innerHTML=""; return; }
   w.innerHTML=SUCS.length>1?`<select id="sucSel" aria-label="Sucursal">${SUCS.map(s=>`<option value="${s.id}" ${s.id===SUC?"selected":""}>📍 ${esc(s.nombre)}</option>`).join("")}</select>`:`<span class="chip">📍 ${esc(SUCS[0].nombre)}</span>`;
   const s=$("sucSel"); if(s) s.onchange=()=>{ SUC=+s.value; ls.set("ag-suc-"+USER.id,SUC); if(CUR) go(CUR); }; }
-function go(id){ CUR=id; $("nav").querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.v===id)); const v=VIEWS.find(x=>x.id===id);
+function go(id){ CUR=id; $("nav").querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.v===id));
+  document.querySelectorAll("#bnav button").forEach(b=>b.classList.toggle("on",b.dataset.v===id||(b.dataset.more&&!BNAV_MAIN.includes(id)))); if(innerWidth<=720) scrollTo(0,0); const v=VIEWS.find(x=>x.id===id);
   $("main").innerHTML=`<p class="muted">Cargando…</p>`; endTour();
   v.f().then(()=>{ if(CUR===id) setTimeout(()=>maybeTour(id),350); }).catch(e=>{ $("main").innerHTML=`<div class="card err">${esc(e.message)}</div>`; }); }
 

@@ -93,4 +93,30 @@ dialog::backdrop{background:rgba(10,15,30,.5)}.dlg{padding:18px}.dlg .acts{displ
 .combo .opt.act,.combo .opt:hover{background:var(--accent-soft)}.combo .opt.add{color:var(--accent);font-weight:600}.combo .opt small{color:var(--muted)}
 #dlg2{max-width:440px}
 .spin{width:18px;height:18px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex:none}@keyframes spin{to{transform:rotate(360deg)}}
+/* ---------- Móvil: menú inferior, cabecera compacta, campos grandes, hojas desde abajo ---------- */
+#bnav{display:none;position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--card);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));justify-content:space-around;box-shadow:0 -4px 16px rgba(0,0,0,.08)}
+#bnav button{flex:1;background:none;border:0;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px;font-size:.68rem;font-weight:600;padding:5px 2px;border-radius:12px;min-height:54px;line-height:1.1}
+#bnav button .i{font-size:1.4rem;line-height:1}#bnav button.on{color:var(--accent);background:var(--accent-soft)}
+.mas{display:grid;grid-template-columns:1fr 1fr;gap:8px}.mas button{justify-content:flex-start;padding:12px;font-size:.95rem;gap:10px}.mas .i{font-size:1.25rem}.mas .full{grid-column:1/-1}
+@media (max-width:720px){
+  html,body{overflow-x:hidden}
+  nav#nav{display:none}#bnav{display:flex}
+  .topin{padding:8px 12px;gap:8px}.brand{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:1rem}#who,#helpBtn,#logout{display:none}
+  .sucsel{max-width:46%}.sucsel select{padding:6px 8px;font-size:.85rem}
+  body{padding-bottom:calc(74px + env(safe-area-inset-bottom,0px))}
+  main{padding:12px}h2{font-size:1.25rem}.card{padding:14px;border-radius:14px}
+  input,select,textarea{font-size:16px;padding:11px 12px;min-height:46px}
+  button,.btn{min-height:44px}button.link{min-height:0}
+  .toolbar{gap:8px}.toolbar>div{flex:1 1 45%;min-width:0}.toolbar>button{flex:1 1 45%}#rtip button{flex:1 1 45%}
+  .inline{flex-wrap:wrap}.inline>.field{flex:1 1 100%}
+  .kpis{grid-template-columns:1fr 1fr;gap:8px}.kpi .v{font-size:1.3rem}
+  .pgrid{grid-template-columns:1fr 1fr!important}
+  dialog{position:fixed;top:auto;bottom:0;left:0;right:0;margin:0;width:100%;max-width:100%;max-height:92dvh;overflow:auto;border-radius:18px 18px 0 0;padding-bottom:env(safe-area-inset-bottom,0px)}
+  dialog#dlg2{top:50%;bottom:auto;transform:translateY(-50%);width:calc(100% - 24px);margin:0 12px;border-radius:14px}
+  .dlg .acts{position:sticky;bottom:0;background:var(--card);padding:10px 0 4px;margin-top:10px}.dlg .acts button{flex:1 1 40%}
+  .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+  .scan{padding:0;align-items:stretch}.scanbox{width:100%;max-width:none;max-height:none;border-radius:0;padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column}.scanvid{aspect-ratio:auto;flex:1;min-height:40vh}
+  .tour-tip{z-index:92}
+}
+@media (max-width:480px){.row{flex-direction:column;gap:0}.row>.field{width:100%}}
 #colaBar:empty{display:none}
