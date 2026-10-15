@@ -28,6 +28,8 @@ function pregunta({titulo="",texto="",input=null,ok="Aceptar",cancelar="Cancelar
   if(!d.open) d.showModal(); const i=B.querySelector("#pqIn"); (i||B.querySelector("#pqOk")).focus(); if(i) i.onkeydown=e=>{ if(e.key==="Enter") B.querySelector("#pqOk").click(); }; }); }
 const confirmar=(texto,opt={})=>pregunta({texto,ok:"Sí, continuar",...opt});
 const avisar=(texto,titulo="")=>pregunta({titulo,texto,cancelar:null,ok:"Entendido"});
+// Ventana de espera (sin botones). Devuelve la función que la cierra.
+function cargando(texto){ const d=$("dlg2"), B=$("dlg2Body"); B.innerHTML=`<p style="margin:0;display:flex;gap:10px;align-items:center"><span class="spin"></span>${esc(texto)}</p>`; d.oncancel=e=>e.preventDefault(); if(!d.open) d.showModal(); return ()=>{ if(d.open) d.close(); }; }
 function descargar(texto,nombre,tipo="text/csv"){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\ufeff"+texto],{type:tipo})); a.download=nombre; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); }
 const sucName=id=>(ALLSUCS.find(s=>s.id===id)||SUCS.find(s=>s.id===id)||{}).nombre||"—";
 const val=(b,s)=>b.querySelector(s)?.value??"";
@@ -492,7 +494,12 @@ async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.est
     f1=f2=null; if($("f1")) enlazarFoto($("rform"),"f1",d=>f1=d); if($("f2")) enlazarFoto($("rform"),"f2",d=>f2=d); };
   $("rv").onchange=form; $("rtip").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{ tipo=b.dataset.t; form(); });
   // Factura electrónica: el QR trae nit, cuf y número; el servidor consulta al SIN y devuelve monto, fecha, emisor y litros
-  const leerFactura=async c=>{ $("rfacInfo").textContent="Consultando la factura al SIN…"; try{ const j=await api("siat",{body:{qr:c,tipo}}); const f=j.factura;
+  const leerFactura=async c=>{ const cerrar=cargando("Consultando la factura al SIN…"); $("rfacInfo").textContent="Consultando…";
+    try{ // 1) el teléfono consulta directo al SIN (desde Cloudflare no responde); 2) el servidor valida, busca el proveedor por NIT y revisa duplicados
+      let objeto=null, sin_mensaje=null; const q=new URL(c).searchParams;
+      try{ const r=await fetch("https://siatrest.impuestos.gob.bo/sre-sfe-shared-v2-rest/consulta/factura",{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({nitEmisor:+q.get("nit"),cuf:q.get("cuf"),numeroFactura:+q.get("numero")}),signal:AbortSignal.timeout(12000)});
+        const s=await r.json(); if(s&&s.transaccion&&s.objeto) objeto=s.objeto; else sin_mensaje=s?.mensajes?.[0]?.descripcion||"sin respuesta"; }catch(e){ /* se intenta desde el servidor */ }
+      const j=await api("siat",{body:{qr:c,tipo,objeto,sin_mensaje}}); const f=j.factura; cerrar();
       if(j.duplicado){ $("rfacInfo").textContent=""; return avisar(`Esta factura ya fue registrada el ${fechaCorta(String(j.duplicado.fecha).slice(0,10))} en el vehículo ${j.duplicado.placa}.`,"Factura repetida"); }
       if($("fm")&&f.monto>0) $("fm").value=f.monto; if($("fl")&&f.litros>0) $("fl").value=f.litros; if($("ffa")) $("ffa").value=f.numero; if($("ff")&&f.fecha&&f.fecha<=today()) $("ff").value=f.fecha; CUF=f.cuf;
       const tp=TIPO_PROV[tipo];
@@ -502,7 +509,7 @@ async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.est
           else toast(`${f.emisor} no está en la lista: elige ${ETIQ_PROV[tp][2]} a mano`); } }
       $("rfacInfo").innerHTML=`🧾 Factura ${esc(f.numero)} · ${esc(f.emisor)} · <b>${money(f.monto)}</b> · ${fechaCorta(f.fecha)}${f.litros?` · ${fmtN(f.litros)} L`:""} <span class="chip ${j.valida?"ok":"bad"}">${esc(f.estado||"sin estado")}</span>`;
       if(!j.valida) await avisar(`El SIN reporta esta factura como "${f.estado}". Revísala antes de guardar.`,"⚠️ Atención"); }
-    catch(e){ $("rfacInfo").textContent=""; toast(e.message); } };
+    catch(e){ cerrar(); $("rfacInfo").textContent=""; await avisar(e.message,"No se pudo leer la factura"); } };
   $("rfac").onclick=()=>scan({titulo:"Escanear el QR de la factura",onCode:c=>{ if(!/nit=|cuf=/i.test(c)) return "⚠️ Ese QR no es de una factura del SIN"; leerFactura(c); return "✓ Factura leída"; }});
   $("rsc").onclick=()=>scan({titulo:"Escanear QR del vehículo",onCode:c=>{ const m=String(c).match(/#v=([a-f0-9]+)/i)||[null,c]; const v=act.find(x=>x.codigo===String(m[1]).toLowerCase()); if(!v) return "⚠️ No es un vehículo de tu flota"; $("rv").value=v.id; form(); return "✓ "+v.placa; }});
   form();

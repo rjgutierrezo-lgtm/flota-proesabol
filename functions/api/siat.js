@@ -16,9 +16,14 @@ export async function onRequestPost({ request, env }) {
   if (!puede(u, "registrar") && !puede(u, "mantenimiento") && !puede(u, "reportes")) return err("Sin permiso", 403);
   const b = await request.json().catch(() => ({})), q = leerQR(b.qr);
   if (!q) return err("Ese QR no es de una factura electrónica del SIN (debe traer nit, cuf y número)");
-  let r; try {
+  // El SIN no responde a consultas desde la red de Cloudflare, así que normalmente el teléfono consulta directo (su API permite CORS)
+  // y nos manda la respuesta en `objeto`. Si no viene, se intenta desde el servidor.
+  let r = null; const o0 = b.objeto && typeof b.objeto === "object" ? b.objeto : null;
+  if (o0 && (!o0.cuf || String(o0.cuf).toUpperCase() === q.cuf) && (!o0.nitEmisor || String(o0.nitEmisor) === q.nit)) r = { transaccion: true, objeto: o0 };
+  else if (b.sin_mensaje) return err("El SIN no reconoce esta factura: " + txt(b.sin_mensaje, 120).trim(), 404);
+  if (!r) try {
     const resp = await fetch(SIN, { method: "PUT", headers: { "content-type": "application/json", accept: "application/json", origin: "https://siat.impuestos.gob.bo", referer: "https://siat.impuestos.gob.bo/consulta/QR" },
-      body: JSON.stringify({ nitEmisor: Number(q.nit), cuf: q.cuf, numeroFactura: Number(q.numero) }), signal: AbortSignal.timeout(10000) });
+      body: JSON.stringify({ nitEmisor: Number(q.nit), cuf: q.cuf, numeroFactura: Number(q.numero) }), signal: AbortSignal.timeout(8000) });
     r = await resp.json();
   } catch (e) { return err("No se pudo consultar al SIN en este momento. Escribe los datos a mano.", 502); }
   if (!r || !r.transaccion || !r.objeto) return err("El SIN no reconoce esta factura" + (r?.mensajes?.[0]?.descripcion ? ": " + txt(r.mensajes[0].descripcion, 120).trim() : ""), 404);
