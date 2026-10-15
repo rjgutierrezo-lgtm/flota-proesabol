@@ -32,7 +32,7 @@ function validar(tipo, b, v) {
   const alertas = [];
   if (tipo === "combustible" && v.tanque_l > 0 && litros > v.tanque_l * 1.05) alertas.push(`Cargó ${litros} L y el tanque es de ${v.tanque_l} L`);
   const lleno = tipo === "combustible" ? (b.lleno === false ? 0 : 1) : 0;
-  return { km, litros, monto, lleno, alertas, proveedor: txt(b.proveedor, 80), detalle: txt(b.detalle, 300), categoria: txt(b.categoria, 40), factura: txt(b.factura, 40) };
+  return { km, litros, monto, lleno, alertas, proveedor: txt(b.proveedor, 80), detalle: txt(b.detalle, 300), categoria: txt(b.categoria, 40), factura: txt(b.factura, 40), cuf: txt(b.cuf, 120).replace(/[^0-9A-Fa-f]/g, "").toUpperCase() || null };
 }
 export async function onRequestPost({ request, env }) {
   const u = await sesion(request, env); if (!u || u.super) return err("Inicia sesión", 401);
@@ -78,6 +78,8 @@ export async function onRequestPost({ request, env }) {
   let cid = u.conductor_id || v.conductor_id; // quién manejaba: el conductor enlazado al usuario, o el asignado al vehículo
   if (b.conductor_id !== undefined && b.conductor_id !== null) { const x = int(b.conductor_id) || null; cid = !x ? null : (await env.DB.prepare("SELECT 1 FROM conductores WHERE id = ? AND empresa_id = ?").bind(x, E(u)).first()) ? x : v.conductor_id; }
   const pr = await resolverProveedor(env, E(u), tipo, b); if (pr.error) return err(pr.error); c.proveedor = pr.nombre;
+  if (c.cuf) { const dup = await env.DB.prepare("SELECT e.fecha, v.placa FROM eventos e JOIN vehiculos v ON v.id = e.vehiculo_id WHERE e.empresa_id = ? AND e.cuf = ? AND e.anulado = 0").bind(E(u), c.cuf).first();
+    if (dup) return err(`Esta factura ya fue registrada el ${String(dup.fecha).slice(0, 10)} en el vehículo ${dup.placa}`, 409); }
   const { km, litros, monto, lleno, alertas } = c;
   if (km != null && km < v.km_actual - 1) { if (!b.confirmar_km) return err(`El kilometraje (${km}) es menor al último registrado (${v.km_actual}). Revisa el odómetro.`, 409); alertas.push(`Km menor al anterior (${v.km_actual})`); }
   if (km != null && km > v.km_actual + 3000 && v.km_actual > 0 && !b.confirmar_km) return err(`Son ${Math.round(km - v.km_actual)} km más que el último registro. ¿Es correcto? Confírmalo para guardar.`, 409);
@@ -93,9 +95,9 @@ export async function onRequestPost({ request, env }) {
   let plan = null; if (tipo === "mantenimiento" && b.plan_id) { plan = await env.DB.prepare("SELECT * FROM planes WHERE id = ? AND vehiculo_id = ? AND activo = 1").bind(int(b.plan_id), v.id).first(); if (!plan) return err("Plan de mantenimiento no válido"); }
   let f1 = null, f2 = null; try { if (b.foto1) f1 = await guardarFoto(env, E(u), b.foto1); if (b.foto2) f2 = await guardarFoto(env, E(u), b.foto2); } catch (e) { return err(e.message); }
   const fecha = esFecha(b.fecha) && b.fecha !== hoyTZ(u.tz) ? mediodia(b.fecha, u.tz) : new Date().toISOString();
-  const st = [env.DB.prepare(`INSERT INTO eventos(empresa_id, sucursal_id, vehiculo_id, tipo, fecha, km, litros, monto, lleno, proveedor, detalle, categoria, plan_id, foto1, foto2, conductor_id, usuario_id, rendimiento, alerta, plan_km_antes, plan_fecha_antes, factura)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(E(u), v.sucursal_id, v.id, tipo, fecha, km, litros, monto, lleno, c.proveedor, c.detalle, c.categoria, plan?.id ?? null, f1, f2, cid, u.id, rendimiento, alertas.join(" · ") || null,
-      plan ? plan.ultimo_km : null, plan ? plan.ultima_fecha : null, c.factura)];
+  const st = [env.DB.prepare(`INSERT INTO eventos(empresa_id, sucursal_id, vehiculo_id, tipo, fecha, km, litros, monto, lleno, proveedor, detalle, categoria, plan_id, foto1, foto2, conductor_id, usuario_id, rendimiento, alerta, plan_km_antes, plan_fecha_antes, factura, cuf)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(E(u), v.sucursal_id, v.id, tipo, fecha, km, litros, monto, lleno, c.proveedor, c.detalle, c.categoria, plan?.id ?? null, f1, f2, cid, u.id, rendimiento, alertas.join(" · ") || null,
+      plan ? plan.ultimo_km : null, plan ? plan.ultima_fecha : null, c.factura, c.cuf)];
   if (km != null && km > v.km_actual) st.push(env.DB.prepare("UPDATE vehiculos SET km_actual = ? WHERE id = ?").bind(km, v.id));
   if (plan) st.push(env.DB.prepare("UPDATE planes SET ultimo_km = ?, ultima_fecha = ? WHERE id = ?").bind(km ?? v.km_actual, fecha.slice(0, 10), plan.id));
   const r = await env.DB.batch(st);

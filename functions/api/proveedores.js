@@ -24,11 +24,11 @@ export async function onRequestPost({ request, env }) {
   const tipo = TIPOS.includes(b.tipo) ? b.tipo : "taller", nombre = txt(b.nombre, 80); if (!nombre) return err("Falta el nombre");
   const dup = await env.DB.prepare("SELECT id FROM proveedores WHERE empresa_id = ? AND tipo = ? AND lower(nombre) = lower(?) AND id <> ?").bind(E(u), tipo, nombre, int(b.id)).first();
   if (dup) return err("Ya existe uno con ese nombre");
-  const vals = [tipo, nombre, txt(b.telefono, 30), txt(b.nota, 200), b.activo === false ? 0 : 1];
+  const vals = [tipo, nombre, txt(b.telefono, 30), txt(b.nota, 200), b.activo === false ? 0 : 1, txt(b.nit, 20).replace(/\D/g, "")];
   if (b.id) {
-    const r = await env.DB.prepare("UPDATE proveedores SET tipo=?, nombre=?, telefono=?, nota=?, activo=? WHERE id=? AND empresa_id=?").bind(...vals, int(b.id), E(u)).run();
+    const r = await env.DB.prepare("UPDATE proveedores SET tipo=?, nombre=?, telefono=?, nota=?, activo=?, nit=? WHERE id=? AND empresa_id=?").bind(...vals, int(b.id), E(u)).run();
     if (!r.meta.changes) return err("No encontrado", 404); return json({ ok: true });
   }
-  const r = await env.DB.prepare("INSERT INTO proveedores(empresa_id, tipo, nombre, telefono, nota, activo) VALUES(?,?,?,?,?,?)").bind(E(u), ...vals).run();
+  const r = await env.DB.prepare("INSERT INTO proveedores(empresa_id, tipo, nombre, telefono, nota, activo, nit) VALUES(?,?,?,?,?,?,?)").bind(E(u), ...vals).run();
   return json({ ok: true, id: r.meta.last_row_id });
 }

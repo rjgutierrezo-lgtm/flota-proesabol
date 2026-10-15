@@ -78,6 +78,7 @@ Un usuario puede limitarse a ciertos parqueos: solo ve y registra los vehículos
 - **Dashboard**: mantenimientos vencidos y próximos con fecha estimada según el uso real de cada vehículo, documentos por vencer, gasto por parqueo y por mes. Botón para enviar el resumen por WhatsApp.
 - **Registrar**: elige el vehículo por lista o escaneando su QR. Combustible calcula km/l entre tanques llenos y avisa si el consumo se sale de lo esperado. Funciona sin señal: el registro se guarda en el teléfono y se envía solo.
 - **Vehículos**: ficha con planes, documentos, costo por km de los últimos 30 días y etiqueta QR para imprimir.
+- **Factura electrónica (Bolivia)**: en Registrar, "Escanear factura" lee el QR de una factura SIAT y consulta el servicio público del SIN: llena monto, fecha, número de factura, litros (si la factura es de combustible) y reconoce la estación por su NIT (campo NIT en Proveedores). Guarda el CUF y rechaza la misma factura dos veces.
 - **Proveedores**: lista de talleres, estaciones de servicio y lavaderos de la empresa. Al registrar, el campo es una lista con buscador: mientras la empresa tenga proveedores de ese tipo, solo se puede elegir de la lista (no se escribe cualquier cosa). Un botón importa los nombres que ya aparecen en el historial.
 - **Historial**: filtros, precio por litro, corrección y anulación de registros, descarga en CSV.
 - **Costos**: gasto por vehículo, por tipo y por mes, costo por km, descarga en CSV.

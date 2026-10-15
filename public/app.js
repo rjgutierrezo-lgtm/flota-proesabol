@@ -320,7 +320,7 @@ const TIPO_PROV={combustible:"surtidor",mantenimiento:"taller",lavado:"lavadero"
 const ETIQ_PROV={surtidor:["Estación de servicio","Estaciones de servicio","la estación de servicio"],taller:["Taller","Talleres","el taller"],lavadero:["Lavadero","Lavaderos","el lavadero"],proveedor:["Proveedor","Otros proveedores","el proveedor"]};
 const provDe=tp=>PROV.filter(p=>p.tipo===tp&&p.activo), puedeProv=()=>can("mantenimiento")||can("vehiculos");
 const norm=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim();
-async function nuevoProv(tp,nombre){ try{ const r=await api("proveedores",{body:{tipo:tp,nombre}}); const p={id:r.id,tipo:tp,nombre,telefono:"",nota:"",activo:1,usos:0}; PROV.push(p); ls.set("ag-prov-"+USER.id,JSON.stringify(PROV)); toast("Agregado a la lista de proveedores"); return p; }
+async function nuevoProv(tp,nombre,nit=""){ try{ const r=await api("proveedores",{body:{tipo:tp,nombre,nit}}); const p={id:r.id,tipo:tp,nombre,nit,telefono:"",nota:"",activo:1,usos:0}; PROV.push(p); ls.set("ag-prov-"+USER.id,JSON.stringify(PROV)); toast("Agregado a la lista de proveedores"); return p; }
   catch(e){ toast(e.message); return null; } }
 // Campo con lista desplegable y buscador. Si la lista tiene elementos solo se puede elegir uno de ellos; si está vacía es texto libre.
 const comboHTML=(id,label,hay,ph)=>`<div class="field"><label>${label}</label><div class="combo"><input id="${id}" autocomplete="off" placeholder="${hay?"Busca y elige de la lista":esc(ph||"")}"><div class="opts hidden" id="${id}L"></div></div><small class="muted" id="${id}H"></small></div>`;
@@ -344,7 +344,7 @@ function combo(B,id,items,o={}){ const inp=B.querySelector("#"+id), box=B.queryS
     else if(ev.key==="Enter"){ ev.preventDefault(); if(idx>=0&&lista[idx]) elegir(lista[idx]); else if(lista.length===1&&!box.classList.contains("hidden")) elegir(lista[0]); else inp.blur(); }
     else if(ev.key==="Escape") cerrar(); };
   if(o.valor){ inp.value=o.valor; const m=items.find(p=>norm(p.nombre)===norm(o.valor)); if(m) set(m); }
-  return { get:()=>{ const v=inp.value.trim(); if(items.length&&v&&!inp.dataset.id&&v!==(o.valor||"")) return {error:`Elige ${o.etiq||"el proveedor"} de la lista`+(o.nuevo?" o agrégalo con «+ Agregar»":". Si falta, pide que lo agreguen en Proveedores")};
+  return { set:p=>elegir(p), setTexto:t=>{ inp.value=t; sel=null; inp.dataset.id=""; marcar(); }, get:()=>{ const v=inp.value.trim(); if(items.length&&v&&!inp.dataset.id&&v!==(o.valor||"")) return {error:`Elige ${o.etiq||"el proveedor"} de la lista`+(o.nuevo?" o agrégalo con «+ Agregar»":". Si falta, pide que lo agreguen en Proveedores")};
     return {proveedor:v,proveedor_id:inp.dataset.id?+inp.dataset.id:null}; } }; }
 const nivelVeh=v=>v.alertas.some(a=>a.nivel==="bad")?"bad":v.alertas.length?"warn":"ok";
 const linkQR=v=>`${location.origin}/#v=${v.codigo}`;
@@ -457,7 +457,7 @@ function escanearVeh(){ scan({titulo:"Escanear QR del vehículo",onCode:c=>{ con
 // ===================== Registrar =====================
 async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.estado!=="baja");
   const pre=PRESEL||{}; PRESEL=null; const mio=act.find(v=>v.id===USER.vehiculo_id)||(USER.conductor_id?act.find(v=>v.conductor_id===USER.conductor_id):null); // vehículo predeterminado del usuario
-  let tipo=pre.tipo||"combustible", vid=pre.vehiculo_id||mio?.id||(act.length===1?act[0].id:null), f1=null, f2=null, CB=null;
+  let tipo=pre.tipo||"combustible", vid=pre.vehiculo_id||mio?.id||(act.length===1?act[0].id:null), f1=null, f2=null, CB=null, CUF=null;
   await cargarProv(); await cargarCond();
   const tipos=Object.keys(TIPOS_EV).filter(t=>t==="mantenimiento"?can("mantenimiento"):can("registrar"));
   if(!tipos.includes(tipo)) tipo=tipos[0];
@@ -466,9 +466,11 @@ async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.est
     <div class="inline"><div class="field"><label>Vehículo *</label><select id="rv"><option value="">Elige el vehículo</option>${act.map(v=>`<option value="${v.id}" ${v.id===vid?"selected":""}>${esc(v.placa)} · ${esc(v.marca)} ${esc(v.modelo)}</option>`).join("")}</select></div>
       <button class="sec" id="rsc" style="margin-bottom:12px">📷 QR</button></div><p class="muted" id="rinfo"></p>
     <div class="toolbar" id="rtip" style="margin:4px 0 12px">${tipos.map(t=>`<button data-t="${t}">${TIPOS_EV[t][0]} ${TIPOS_EV[t][1]}</button>`).join("")}</div>
+    <div id="rfacBar" class="toolbar" style="margin:0 0 10px;align-items:center"><button class="sec" id="rfac" title="Lee el QR de la factura electrónica y llena monto, fecha, número y estación">🧾 Escanear QR de la factura</button><span id="rfacInfo" class="muted" style="font-size:.9rem"></span></div>
     <div id="rform"></div><div class="err" id="re"></div><button id="rok" style="width:100%;font-size:1.05rem;padding:12px">Guardar</button></div>`;
   const veh=()=>VEH.find(v=>v.id===+$("rv").value);
   const form=()=>{ const v=veh(); $("rtip").querySelectorAll("[data-t]").forEach(b=>b.className=b.dataset.t===tipo?"":"sec");
+    CUF=null; $("rfacBar").classList.toggle("hidden",tipo==="kilometraje"); $("rfacInfo").textContent="";
     $("rinfo").textContent=v?`Último km: ${fmtKm(v.km_actual)}${v.conductor?` · Conductor: ${v.conductor}`:""}${v.rendimiento_esp?` · Esperado ${v.rendimiento_esp} km/l`:""}`:"";
     const km=`<div class="field"><label>Kilometraje (odómetro)${["combustible","kilometraje"].includes(tipo)?" *":""}</label><input id="fk" inputmode="numeric" placeholder="${v?Math.round(v.km_actual):""}"></div>`;
     const fecha=`<div class="field"><label>Fecha</label><input type="date" id="ff" value="${today()}" max="${today()}"></div>`;
@@ -489,12 +491,25 @@ async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.est
     CB=$("fp")?combo($("rform"),"fp",provDe(tp),{etiq:ETIQ_PROV[tp][2],plural:ETIQ_PROV[tp][1],nuevo:puedeProv()?n=>nuevoProv(tp,n):null}):null;
     f1=f2=null; if($("f1")) enlazarFoto($("rform"),"f1",d=>f1=d); if($("f2")) enlazarFoto($("rform"),"f2",d=>f2=d); };
   $("rv").onchange=form; $("rtip").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{ tipo=b.dataset.t; form(); });
+  // Factura electrónica: el QR trae nit, cuf y número; el servidor consulta al SIN y devuelve monto, fecha, emisor y litros
+  const leerFactura=async c=>{ $("rfacInfo").textContent="Consultando la factura al SIN…"; try{ const j=await api("siat",{body:{qr:c,tipo}}); const f=j.factura;
+      if(j.duplicado){ $("rfacInfo").textContent=""; return avisar(`Esta factura ya fue registrada el ${fechaCorta(String(j.duplicado.fecha).slice(0,10))} en el vehículo ${j.duplicado.placa}.`,"Factura repetida"); }
+      if($("fm")&&f.monto>0) $("fm").value=f.monto; if($("fl")&&f.litros>0) $("fl").value=f.litros; if($("ffa")) $("ffa").value=f.numero; if($("ff")&&f.fecha&&f.fecha<=today()) $("ff").value=f.fecha; CUF=f.cuf;
+      const tp=TIPO_PROV[tipo];
+      if(CB){ if(j.proveedor) CB.set(j.proveedor);
+        else if(f.emisor){ if(!provDe(tp).length) CB.setTexto(f.emisor);
+          else if(puedeProv()&&await confirmar(`"${f.emisor}" (NIT ${f.nit}) no está en tu lista de ${ETIQ_PROV[tp][1].toLowerCase()}. ¿Agregarlo?`,{ok:"Agregar"})){ const p=await nuevoProv(tp,f.emisor,f.nit); if(p) CB.set(p); }
+          else toast(`${f.emisor} no está en la lista: elige ${ETIQ_PROV[tp][2]} a mano`); } }
+      $("rfacInfo").innerHTML=`🧾 Factura ${esc(f.numero)} · ${esc(f.emisor)} · <b>${money(f.monto)}</b> · ${fechaCorta(f.fecha)}${f.litros?` · ${fmtN(f.litros)} L`:""} <span class="chip ${j.valida?"ok":"bad"}">${esc(f.estado||"sin estado")}</span>`;
+      if(!j.valida) await avisar(`El SIN reporta esta factura como "${f.estado}". Revísala antes de guardar.`,"⚠️ Atención"); }
+    catch(e){ $("rfacInfo").textContent=""; toast(e.message); } };
+  $("rfac").onclick=()=>scan({titulo:"Escanear el QR de la factura",onCode:c=>{ if(!/nit=|cuf=/i.test(c)) return "⚠️ Ese QR no es de una factura del SIN"; leerFactura(c); return "✓ Factura leída"; }});
   $("rsc").onclick=()=>scan({titulo:"Escanear QR del vehículo",onCode:c=>{ const m=String(c).match(/#v=([a-f0-9]+)/i)||[null,c]; const v=act.find(x=>x.codigo===String(m[1]).toLowerCase()); if(!v) return "⚠️ No es un vehículo de tu flota"; $("rv").value=v.id; form(); return "✓ "+v.placa; }});
   form();
   const guardar=async confirmar=>{ $("re").textContent=""; if(!$("rv").value) return $("re").textContent="Elige el vehículo";
     const g=id=>$(id)?$(id).value.replace(",","."):""; const pv=CB?CB.get():{proveedor:""}; if(pv.error) return $("re").textContent=pv.error;
     if(EMP.foto_obligatoria&&["combustible","mantenimiento"].includes(tipo)&&!f1) return $("re").textContent="Tu empresa exige la foto de la factura en este registro. Tómala o elige el archivo antes de guardar.";
-    const body={tipo,vehiculo_id:+$("rv").value,km:g("fk"),litros:g("fl"),monto:g("fm"),lleno:$("fll")?$("fll").checked:true,proveedor:pv.proveedor,proveedor_id:pv.proveedor_id||null,factura:$("ffa")?.value||"",conductor_id:$("fco")?$("fco").value:undefined,detalle:$("fd")?.value||"",categoria:$("fc")?.value||"",plan_id:$("fpl")?.value||null,fecha:$("ff")?.value||"",foto1:f1,foto2:f2,confirmar_km:confirmar};
+    const body={tipo,vehiculo_id:+$("rv").value,km:g("fk"),litros:g("fl"),monto:g("fm"),lleno:$("fll")?$("fll").checked:true,proveedor:pv.proveedor,proveedor_id:pv.proveedor_id||null,factura:$("ffa")?.value||"",cuf:CUF,conductor_id:$("fco")?$("fco").value:undefined,detalle:$("fd")?.value||"",categoria:$("fc")?.value||"",plan_id:$("fpl")?.value||null,fecha:$("ff")?.value||"",foto1:f1,foto2:f2,confirmar_km:confirmar};
     $("rok").disabled=true;
     try{ const r=await api("eventos",{body}); beepScan();
       toast(r.rendimiento?`Guardado · Rendimiento ${fmtN(r.rendimiento)} km/l`:"Guardado"); if(r.alertas?.length) await avisar(r.alertas.join("\n"),"⚠️ Atención"); PRESEL={vehiculo_id:body.vehiculo_id,tipo}; go("registrar"); }
@@ -676,14 +691,14 @@ async function viewProveedores(){ await cargarProv(); let tp=PRESEL?.tipo_prov||
     <div class="toolbar"><div class="toolbar" id="ptip" style="margin:0">${Object.keys(ETIQ_PROV).map(t=>`<button data-t="${t}">${ETIQ_PROV[t][1]}</button>`).join("")}</div><span style="flex:1"></span>
       <button class="sec" id="pimp" title="Crea un proveedor por cada nombre que ya aparece en el historial">⤓ Importar del historial</button><button id="pnew">+ Nuevo</button></div><div id="plist"></div>`;
   const pintar=()=>{ $("ptip").querySelectorAll("[data-t]").forEach(b=>b.className=b.dataset.t===tp?"":"sec"); const l=PROV.filter(p=>p.tipo===tp);
-    $("plist").innerHTML=`<div class="card tbl"><table><thead><tr><th>Nombre</th><th>Teléfono</th><th>Nota</th><th class="n">Registros</th></tr></thead><tbody>${l.map(p=>`<tr class="click" data-id="${p.id}" style="${p.activo?"":"opacity:.5"}"><td><b>${esc(p.nombre)}</b>${p.activo?"":' <span class="chip">inactivo</span>'}</td><td>${esc(p.telefono)}</td><td><small>${esc(p.nota)}</small></td><td class="n">${p.usos||0}</td></tr>`).join("")
-      ||`<tr><td colspan="4" class="muted">Aún no hay ${ETIQ_PROV[tp][1].toLowerCase()}. Mientras esta lista esté vacía, en Registrar se escribe el nombre a mano.</td></tr>`}</tbody></table></div>`;
+    $("plist").innerHTML=`<div class="card tbl"><table><thead><tr><th>Nombre</th><th>NIT</th><th>Teléfono</th><th>Nota</th><th class="n">Registros</th></tr></thead><tbody>${l.map(p=>`<tr class="click" data-id="${p.id}" style="${p.activo?"":"opacity:.5"}"><td><b>${esc(p.nombre)}</b>${p.activo?"":' <span class="chip">inactivo</span>'}</td><td><small>${esc(p.nit||"")}</small></td><td>${esc(p.telefono)}</td><td><small>${esc(p.nota)}</small></td><td class="n">${p.usos||0}</td></tr>`).join("")
+      ||`<tr><td colspan="5" class="muted">Aún no hay ${ETIQ_PROV[tp][1].toLowerCase()}. Mientras esta lista esté vacía, en Registrar se escribe el nombre a mano.</td></tr>`}</tbody></table></div>`;
     $("plist").querySelectorAll("tr[data-id]").forEach(tr=>tr.onclick=()=>form(PROV.find(p=>p.id==tr.dataset.id))); };
   const form=p=>dialog(`<h3>${p?"Editar":"Nuevo"} proveedor</h3><div class="row"><div class="field"><label>Tipo</label><select id="pt">${Object.keys(ETIQ_PROV).map(t=>`<option value="${t}" ${(p?p.tipo:tp)===t?"selected":""}>${ETIQ_PROV[t][0]}</option>`).join("")}</select></div><div class="field"><label>Nombre *</label><input id="pn" value="${esc(p?.nombre||"")}"></div></div>
-    <div class="row"><div class="field"><label>Teléfono</label><input id="pf" value="${esc(p?.telefono||"")}"></div><div class="field"><label>Nota</label><input id="po" value="${esc(p?.nota||"")}" placeholder="Dirección, contacto, horario…"></div></div>
+    <div class="row"><div class="field"><label>NIT (para reconocerlo al escanear la factura)</label><input id="pnit" inputmode="numeric" value="${esc(p?.nit||"")}"></div><div class="field"><label>Teléfono</label><input id="pf" value="${esc(p?.telefono||"")}"></div><div class="field"><label>Nota</label><input id="po" value="${esc(p?.nota||"")}" placeholder="Dirección, contacto, horario…"></div></div>
     ${p?`<label class="check"><input type="checkbox" id="pa" ${p.activo?"checked":""}> Activo (si lo desactivas ya no aparece al registrar)</label>`:""}<div class="err" id="pe"></div><div class="acts"><button class="sec" id="px">Cancelar</button><button id="pok">Guardar</button></div>`, B=>{
     B.querySelector("#px").onclick=closeDlg;
-    B.querySelector("#pok").onclick=async()=>{ try{ await api("proveedores",{body:{id:p?.id,tipo:val(B,"#pt"),nombre:val(B,"#pn"),telefono:val(B,"#pf"),nota:val(B,"#po"),activo:p?B.querySelector("#pa").checked:true}}); closeDlg(); toast("Guardado"); tp=val(B,"#pt"); await cargarProv(); pintar(); }
+    B.querySelector("#pok").onclick=async()=>{ try{ await api("proveedores",{body:{id:p?.id,tipo:val(B,"#pt"),nombre:val(B,"#pn"),nit:val(B,"#pnit"),telefono:val(B,"#pf"),nota:val(B,"#po"),activo:p?B.querySelector("#pa").checked:true}}); closeDlg(); toast("Guardado"); tp=val(B,"#pt"); await cargarProv(); pintar(); }
       catch(e){ B.querySelector("#pe").textContent=e.message; } }; });
   $("ptip").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{ tp=b.dataset.t; pintar(); });
   $("pnew").onclick=()=>form(null);
