@@ -520,8 +520,10 @@ async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.est
         else if(f.emisor){ if(!provDe(tp).length) CB.setTexto(f.emisor);
           else if(puedeProv()&&await confirmar(`"${f.emisor}" (NIT ${f.nit}) no está en tu lista de ${ETIQ_PROV[tp][1].toLowerCase()}. ¿Agregarlo?`,{ok:"Agregar"})){ const p=await nuevoProv(tp,f.emisor,f.nit); if(p) CB.set(p); }
           else toast(`${f.emisor} no está en la lista: elige ${ETIQ_PROV[tp][2]} a mano`); } }
-      $("rfacInfo").innerHTML=`🧾 Factura ${esc(f.numero)} · ${esc(f.emisor)} · <b>${money(f.monto)}</b> · ${fechaCorta(f.fecha)}${f.litros?` · ${fmtN(f.litros)} L`:""} <span class="chip ${j.valida?"ok":"bad"}">${esc(f.estado||"sin estado")}</span>`;
-      if(!j.valida) await avisar(`El SIN reporta esta factura como "${f.estado}". Revísala antes de guardar.`,"⚠️ Atención"); }
+      $("rfacInfo").innerHTML=`🧾 Factura ${esc(f.numero)} · ${esc(f.emisor)} · <b>${money(f.monto)}</b> · ${fechaCorta(f.fecha)}${f.litros?` · ${fmtN(f.litros)} L${f.precio_litro?` a ${money(f.precio_litro)}/L`:""}`:""}${f.tipo_comb?` · ${esc(f.tipo_comb)}`:""} <span class="chip ${j.valida?"ok":"bad"}">${esc(f.estado||"sin estado")}</span><br><small>CUF ${esc(f.cuf)}</small>`;
+      if(!j.valida) await avisar(`El SIN reporta esta factura como "${f.estado}". Revísala antes de guardar.`,"⚠️ Atención");
+      const v=veh(); if(tipo==="combustible"&&f.tipo_comb&&v?.combustible&&norm(v.combustible)!==norm(f.tipo_comb)) await avisar(`La factura es de ${f.tipo_comb} y el vehículo ${v.placa} está registrado como ${v.combustible}. Revisa que sea la factura correcta.`,"⚠️ Combustible distinto");
+      if(tipo==="combustible"&&!f.litros) toast("La factura no detalla litros: escríbelos a mano"); }
     catch(e){ cerrar(); $("rfacInfo").textContent=""; await avisar(e.message,"No se pudo leer la factura"); } };
   $("rfac").onclick=()=>scan({titulo:"Escanear el QR de la factura",onCode:c=>{ if(!/nit=|cuf=/i.test(c)) return "⚠️ Ese QR no es de una factura del SIN"; leerFactura(c); return "✓ Factura leída"; }});
   $("rsc").onclick=()=>scan({titulo:"Escanear QR del vehículo",onCode:c=>{ const m=String(c).match(/#v=([a-f0-9]+)/i)||[null,c]; const v=act.find(x=>x.codigo===String(m[1]).toLowerCase()); if(!v) return "⚠️ No es un vehículo de tu flota"; $("rv").value=v.id; form(); return "✓ "+v.placa; }});
@@ -638,7 +640,7 @@ async function viewHistorial(){ await cargarVeh(); await cargarProv(); await car
     $("hrows").querySelectorAll("tr[data-id]").forEach(tr=>tr.onclick=()=>detalleEvento(EV.find(x=>x.id==tr.dataset.id))); };
   const detalleEvento=e=>{ const propio=e.usuario_id===USER.id&&Date.now()-new Date(String(e.creado).replace(" ","T")+"Z")<24*3600e3, puedeEditar=!e.anulado&&(rep||propio);
     dialog(`<h3>${TIPOS_EV[e.tipo][0]} ${TIPOS_EV[e.tipo][1]} · ${esc(e.placa)}</h3><p class="muted">${fechaHora(e.fecha)} · ${esc(e.usuario||"")}${e.conductor?` · Conductor: ${esc(e.conductor)}`:""}</p>
-      <div class="tbl"><table>${[["Kilometraje",e.km!=null?fmtKm(e.km):""],["Litros",e.litros?fmtN(e.litros):""],["Precio por litro",e.litros&&e.monto?money(e.monto/e.litros):""],["Rendimiento",e.rendimiento?fmtN(e.rendimiento)+" km/l":""],["Monto",e.monto?money(e.monto):""],["Plan",e.plan||""],["Tipo de gasto",e.categoria||""],["Proveedor",e.proveedor||""],["N° factura",e.factura||""],["Conductor",e.conductor||""],["Detalle",e.detalle||""],["Alerta",e.alerta||""]].filter(x=>x[1]).map(([a,b])=>`<tr><td>${a}</td><td>${esc(b)}</td></tr>`).join("")}</table></div>
+      <div class="tbl"><table>${[["Kilometraje",e.km!=null?fmtKm(e.km):""],["Litros",e.litros?fmtN(e.litros):""],["Precio por litro",e.litros&&e.monto?money(e.monto/e.litros):""],["Rendimiento",e.rendimiento?fmtN(e.rendimiento)+" km/l":""],["Monto",e.monto?money(e.monto):""],["Plan",e.plan||""],["Tipo de gasto",e.categoria||""],["Proveedor",e.proveedor||""],["N° factura",e.factura||""],["CUF (factura electrónica)",e.cuf||""],["Conductor",e.conductor||""],["Detalle",e.detalle||""],["Alerta",e.alerta||""]].filter(x=>x[1]).map(([a,b])=>`<tr><td>${a}</td><td>${esc(b)}</td></tr>`).join("")}</table></div>
       <div class="row" style="margin-top:10px">${[e.foto1,e.foto2].filter(Boolean).map(k=>`<img data-k="${esc(k)}" alt="Foto" style="max-width:100%;border-radius:8px">`).join("")}</div>
       <div class="acts">${rep&&!e.anulado?`<button class="danger" id="han" style="margin-right:auto">Anular</button>`:""}${puedeEditar?`<button class="sec" id="hed">✏️ Corregir</button>`:""}<button id="hx">Cerrar</button></div>`, B=>{ pintarFotos(B); B.querySelector("#hx").onclick=closeDlg;
       const ed=B.querySelector("#hed"); if(ed) ed.onclick=()=>editarEvento(e);
@@ -686,8 +688,8 @@ async function viewReportes(){
     const csv=[h.join(";"),...J.vehiculos.map(v=>[v.placa,Math.round(v.km||0),v.litros,v.rendimiento?.toFixed(2)||"",v.combustible,v.mantenimiento,v.lavado,v.gastos,v.total].join(";"))].join("\n");
     descargar(csv,`flota_${$("rd").value}_${$("rh").value}.csv`); };
   $("rcont").onclick=async()=>{ try{ const j=await api(`eventos?csv=1&desde=${$("rd").value}&hasta=${$("rh").value}`); const c=x=>`"${String(x??"").replace(/"/g,'""')}"`;
-    const csv=[["Fecha","Tipo","Placa","Parqueo","Proveedor","N° factura","Categoría / plan","Detalle","Km","Litros",`Monto (${EMP.moneda})`,"Conductor","Registró"].map(c).join(";"),
-      ...j.eventos.filter(e=>!e.anulado).map(e=>[fechaHora(e.fecha).split(",")[0],TIPOS_EV[e.tipo][1],e.placa,e.sucursal,e.proveedor,e.factura,e.plan||e.categoria,e.detalle,e.km!=null?Math.round(e.km):"",e.litros||"",e.monto||0,e.conductor,e.usuario].map(c).join(";"))].join("\n");
+    const csv=[["Fecha","Tipo","Placa","Parqueo","Proveedor","N° factura","CUF","Categoría / plan","Detalle","Km","Litros",`Monto (${EMP.moneda})`,"Conductor","Registró"].map(c).join(";"),
+      ...j.eventos.filter(e=>!e.anulado).map(e=>[fechaHora(e.fecha).split(",")[0],TIPOS_EV[e.tipo][1],e.placa,e.sucursal,e.proveedor,e.factura,e.cuf,e.plan||e.categoria,e.detalle,e.km!=null?Math.round(e.km):"",e.litros||"",e.monto||0,e.conductor,e.usuario].map(c).join(";"))].join("\n");
     descargar(csv,`contable_${$("rd").value}_${$("rh").value}.csv`); if(j.mas) toast("El período tiene más de 5000 registros: acórtalo para exportar todo"); }catch(e){ toast(e.message); } };
   await load(); }
 

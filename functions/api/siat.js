@@ -29,9 +29,13 @@ export async function onRequestPost({ request, env }) {
   if (!r || !r.transaccion || !r.objeto) return err("El SIN no reconoce esta factura" + (r?.mensajes?.[0]?.descripcion ? ": " + txt(r.mensajes[0].descripcion, 120).trim() : ""), 404);
   const o = r.objeto, det = Array.isArray(o.listaDetalle) ? o.listaDetalle : [];
   const detalle = det.map(d => ({ descripcion: txt(d.descripcion || d.descripcionProducto || d.producto, 120), cantidad: num(d.cantidad), precio: num(d.precioUnitario), subtotal: num(d.subTotal ?? d.subtotal ?? d.montoTotal) }));
-  const comb = detalle.filter(d => /gasolina|di[eé]sel|gnv|gas natural|combustible|especial|premium/i.test(d.descripcion));
-  const factura = { nit: q.nit, numero: q.numero, cuf: q.cuf, fecha: fechaISO(o.fechaEmision), monto: Math.round(num(o.montoTotal) * 100) / 100, estado: txt(o.estadoFactura, 40), emisor: txt(o.razonSocialEmisor, 120),
-    cliente: txt(o.nombreRazonSocial, 120), cliente_doc: txt(o.numeroDocumento, 30), litros: comb.length ? Math.round(comb.reduce((a, d) => a + d.cantidad, 0) * 100) / 100 : null, detalle };
+  // Litros: las líneas de combustible por su descripción; si no se reconoce ninguna y el registro es de combustible, las líneas con precio típico por litro
+  const esComb = d => /gasolina|di[eé]sel|gnv|gas natural|combustible|especial|premium|ultra|etanol|nafta|petr[oó]leo/i.test(d.descripcion);
+  let comb = detalle.filter(esComb); if (!comb.length && b.tipo === "combustible") comb = detalle.filter(d => d.cantidad > 0 && d.precio >= 2 && d.precio <= 15);
+  const litros = comb.length ? Math.round(comb.reduce((a, d) => a + d.cantidad, 0) * 100) / 100 : null, monto = Math.round(num(o.montoTotal) * 100) / 100;
+  const desc = comb.map(d => d.descripcion).join(" "), tipo_comb = /di[eé]sel|petr[oó]leo/i.test(desc) ? "Diésel" : /gnv|gas natural/i.test(desc) ? "GNV" : /gasolina|especial|premium|ultra|etanol|nafta/i.test(desc) ? "Gasolina" : null;
+  const factura = { nit: q.nit, numero: q.numero, cuf: q.cuf, fecha: fechaISO(o.fechaEmision), monto, estado: txt(o.estadoFactura, 40), emisor: txt(o.razonSocialEmisor, 120),
+    cliente: txt(o.nombreRazonSocial, 120), cliente_doc: txt(o.numeroDocumento, 30), litros, precio_litro: litros > 0 && monto > 0 ? Math.round(monto / litros * 100) / 100 : null, tipo_comb, detalle };
   const tp = TIPOS_PROV[b.tipo] || null;
   const prov = await env.DB.prepare(`SELECT id, nombre, tipo FROM proveedores WHERE empresa_id = ? AND activo = 1 AND nit = ?${tp ? " AND tipo = ?" : ""} ORDER BY id LIMIT 1`).bind(E(u), q.nit, ...(tp ? [tp] : [])).first();
   const dup = await env.DB.prepare("SELECT e.id, e.fecha, v.placa FROM eventos e JOIN vehiculos v ON v.id = e.vehiculo_id WHERE e.empresa_id = ? AND e.cuf = ? AND e.anulado = 0").bind(E(u), q.cuf).first();
