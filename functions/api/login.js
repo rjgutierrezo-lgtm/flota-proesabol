@@ -22,8 +22,8 @@ export async function onRequestPost({ request, env }) {
       // AD: service binding al Worker puente (túnel + Workers VPC, sin dominio). AD_URL: dirección pública del agente.
       const init = { method: "POST", headers: { "content-type": "application/json", "x-agente-secreto": env.AD_SECRETO }, body: JSON.stringify({ usuario, password: String(b.password || "") }), signal: AbortSignal.timeout(8000) };
       const resp = env.AD ? await env.AD.fetch("https://agente-ad/validar", init) : await fetch(String(env.AD_URL).replace(/\/$/, "") + "/validar", init);
-      r = await resp.json();
-    } catch (e) { return err("No se pudo contactar con el servidor de la empresa. Intenta de nuevo o usa tu contraseña de FlotaControl.", 502); }
+      const t = await resp.text(); try { r = JSON.parse(t); } catch (x) { throw new Error(`respuesta ${resp.status}: ${t.slice(0, 120)}`); }
+    } catch (e) { console.log("agente AD:", String(e && e.message || e)); return err("No se pudo contactar con el servidor de la empresa. Intenta de nuevo o usa tu contraseña de FlotaControl. (" + String(e && e.message || e).slice(0, 160) + ")", 502); }
     if (!r?.ok) { await intentoFallido(env, claves); return err(r?.error || "Usuario o contraseña incorrectos", 401); }
     const cuenta = String(r.cuenta || usuario).toLowerCase().replace(/^.*\\/, "").replace(/@.*$/, ""), correo = String(r.correo || "").toLowerCase(), clave = "ad:" + (r.sid || cuenta);
     u = await env.DB.prepare("SELECT * FROM usuarios WHERE ms_oid = ? AND activo = 1").bind(clave).first();
