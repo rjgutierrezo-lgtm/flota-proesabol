@@ -1,4 +1,4 @@
-# Instala el agente AD de FlotaControl como tarea programada que arranca con Windows (sin sesión iniciada).
+﻿# Instala el agente AD de FlotaControl como tarea programada que arranca con Windows (sin sesión iniciada).
 # Ejecutar en PowerShell como administrador: powershell -ExecutionPolicy Bypass -File instalar.ps1
 $ErrorActionPreference = "Stop"
 $raiz = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -11,6 +11,7 @@ $accion = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfil
 $disparador = New-ScheduledTaskTrigger -AtStartup
 $config = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 3650) -StartWhenAvailable
 # Corre como SYSTEM: puede consultar el dominio desde una máquina unida a él sin guardar contraseñas
+if (Get-ScheduledTask -TaskName $nombre -ErrorAction SilentlyContinue) { Stop-ScheduledTask -TaskName $nombre -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2 }
 Register-ScheduledTask -TaskName $nombre -Action $accion -Trigger $disparador -Settings $config -User "SYSTEM" -RunLevel Highest -Force | Out-Null
 Start-ScheduledTask -TaskName $nombre
 Start-Sleep -Seconds 3

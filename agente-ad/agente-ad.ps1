@@ -1,4 +1,4 @@
-# Agente de Active Directory para FlotaControl.
+﻿# Agente de Active Directory para FlotaControl.
 # Corre en cualquier PC o servidor de la red (NO en el controlador de dominio) y responde si un usuario y contraseña
 # son válidos en el dominio. Solo escucha en localhost; se publica a internet con un túnel de Cloudflare (cloudflared).
 # Requiere PowerShell 5.1 (viene con Windows) y que la máquina esté unida al dominio o lo vea en la red.
@@ -20,17 +20,28 @@ function Validar($usuario, $password) {
   $u = $usuario -replace '^.*\\', '' -replace '@.*$', ''
   $u = $u.Trim().ToLower()
   if ($u -notmatch '^[a-z0-9._-]{1,64}$' -or -not $password) { return @{ ok = $false; error = "Usuario o contraseña incorrectos" } }
-  $ctx = if ($cfg.dominio) { New-Object System.DirectoryServices.AccountManagement.PrincipalContext($tipo, $cfg.dominio) } else { New-Object System.DirectoryServices.AccountManagement.PrincipalContext($tipo) }
+  # El dominio: el de config.json, o el de la máquina si está unida al dominio
+  $dom = if ($cfg.dominio) { $cfg.dominio } elseif ($env:USERDNSDOMAIN) { $env:USERDNSDOMAIN } else { $null }
+  if (-not $dom) { return @{ ok = $false; error = "Falta 'dominio' en config.json (ej: proesabol.loc)" } }
+  # 1) Validar la contraseña. 2) Leer la ficha (nombre, correo, grupos) con las credenciales del propio usuario, para no depender
+  #    de los permisos de la cuenta que corre el agente. Si la ficha no se puede leer, igual se deja pasar con los datos mínimos.
+  $ctx = New-Object System.DirectoryServices.AccountManagement.PrincipalContext($tipo, $dom)
+  try { $valido = $ctx.ValidateCredentials($u, $password, [System.DirectoryServices.AccountManagement.ContextOptions]::Negotiate) } finally { $ctx.Dispose() }
+  if (-not $valido) { return @{ ok = $false; error = "Usuario o contraseña incorrectos" } }
+  $p = $null; $ctx2 = $null
   try {
-    $valido = $ctx.ValidateCredentials($u, $password, [System.DirectoryServices.AccountManagement.ContextOptions]::Negotiate)
-    if (-not $valido) { return @{ ok = $false; error = "Usuario o contraseña incorrectos" } }
-    $p = [System.DirectoryServices.AccountManagement.UserPrincipal]::FindByIdentity($ctx, [System.DirectoryServices.AccountManagement.IdentityType]::SamAccountName, $u)
+    $ctx2 = New-Object System.DirectoryServices.AccountManagement.PrincipalContext($tipo, $dom, $u, $password)
+    $p = [System.DirectoryServices.AccountManagement.UserPrincipal]::FindByIdentity($ctx2, [System.DirectoryServices.AccountManagement.IdentityType]::SamAccountName, $u)
+  } catch { Log "no se pudo leer la ficha de $u ($($_.Exception.Message)); se continúa con datos mínimos" }
+  try {
     if ($p -and $p.Enabled -eq $false) { return @{ ok = $false; error = "La cuenta está deshabilitada en el dominio" } }
-    $grupos = @()
-    if ($p -and $cfg.grupo) { try { $grupos = @($p.GetGroups() | ForEach-Object { $_.SamAccountName }) } catch { $grupos = @() } }
-    if ($cfg.grupo -and ($grupos -notcontains $cfg.grupo)) { return @{ ok = $false; error = "Tu usuario no pertenece al grupo autorizado ($($cfg.grupo))" } }
-    return @{ ok = $true; cuenta = $u; nombre = $(if ($p) { $p.DisplayName } else { $u }); correo = $(if ($p -and $p.EmailAddress) { $p.EmailAddress.ToLower() } else { "" }); sid = $(if ($p) { $p.Sid.Value } else { "" }) }
-  } finally { $ctx.Dispose() }
+    if ($cfg.grupo) {
+      if (-not $p) { return @{ ok = $false; error = "No se pudo comprobar el grupo autorizado; avisa al administrador" } }
+      $grupos = @(); try { $grupos = @($p.GetGroups() | ForEach-Object { $_.SamAccountName }) } catch { $grupos = @() }
+      if ($grupos -notcontains $cfg.grupo) { return @{ ok = $false; error = "Tu usuario no pertenece al grupo autorizado ($($cfg.grupo))" } }
+    }
+    return @{ ok = $true; cuenta = $u; nombre = $(if ($p -and $p.DisplayName) { $p.DisplayName } else { $u }); correo = $(if ($p -and $p.EmailAddress) { $p.EmailAddress.ToLower() } else { "" }); sid = $(if ($p -and $p.Sid) { $p.Sid.Value } else { "" }) }
+  } finally { if ($ctx2) { $ctx2.Dispose() } }
 }
 
 $listener = New-Object System.Net.HttpListener
