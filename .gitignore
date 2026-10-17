@@ -1,3 +1,4 @@
 .wrangler/
 wrangler.toml
 node_modules/
+agente-ad/config.json

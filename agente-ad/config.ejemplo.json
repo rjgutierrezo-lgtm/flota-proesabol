@@ -1,6 +1,6 @@
 {
   "secreto": "cambia-esto-por-una-clave-larga-y-unica-de-mas-de-20-caracteres",
-  "dominio": "",
+  "dominio": "proesabol.loc",
   "grupo": "",
   "puerto": 8787
 }
