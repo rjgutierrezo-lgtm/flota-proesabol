@@ -18,6 +18,13 @@ export async function onRequestPost({ request, env }) {
   let u;
   if (b.dominio) { // usuario de Windows: lo valida el agente AD instalado en la red de la empresa (agente-ad/)
     if (!(env.AD || env.AD_URL) || !env.AD_SECRETO) return err("El ingreso con usuario de dominio no está configurado", 404);
+    // Protección del AD: solo se consulta al dominio si existe un usuario de FlotaControl con ese nombre de cuenta
+    // (o con un correo cuyo nombre sea esa cuenta). Así nadie puede probar contraseñas de cuentas que no usan la app.
+    // Cada fallo de dominio cuenta doble: se corta a los 3 intentos, antes de que el AD bloquee la cuenta (suele ser 5).
+    const cta = usuario.replace(/^.*\\/, "").replace(/@.*$/, "");
+    if (["administrator", "administrador", "admin", "krbtgt", "guest", "invitado"].includes(cta)) { await intentoFallido(env, claves); return err("Usuario o contraseña incorrectos", 401); }
+    const existe = await env.DB.prepare("SELECT 1 FROM usuarios WHERE activo = 1 AND (lower(usuario) = ? OR lower(email) LIKE ?)").bind(cta, cta + "@%").first();
+    if (!existe) { await intentoFallido(env, claves); await intentoFallido(env, claves); return err("Usuario o contraseña incorrectos", 401); }
     let r; try {
       // AD: service binding al Worker puente (túnel + Workers VPC, sin dominio). AD_URL: dirección pública del agente.
       // AD_SECRETO tolera que se pegue el config.json completo del agente o con espacios/saltos de línea
@@ -26,7 +33,7 @@ export async function onRequestPost({ request, env }) {
       const resp = env.AD ? await env.AD.fetch("https://agente-ad/validar", init) : await fetch(String(env.AD_URL).replace(/\/$/, "") + "/validar", init);
       const t = await resp.text(); try { r = JSON.parse(t); } catch (x) { throw new Error(`respuesta ${resp.status}: ${t.slice(0, 120)}`); }
     } catch (e) { console.log("agente AD:", String(e && e.message || e)); return err("No se pudo contactar con el servidor de la empresa. Intenta de nuevo o usa tu contraseña de FlotaControl. (" + String(e && e.message || e).slice(0, 160) + ")", 502); }
-    if (!r?.ok) { await intentoFallido(env, claves); return err(r?.error || "Usuario o contraseña incorrectos", 401); }
+    if (!r?.ok) { await intentoFallido(env, claves); await intentoFallido(env, claves); return err(r?.error || "Usuario o contraseña incorrectos", 401); }
     const cuenta = String(r.cuenta || usuario).toLowerCase().replace(/^.*\\/, "").replace(/@.*$/, ""), correo = String(r.correo || "").toLowerCase(), clave = "ad:" + (r.sid || cuenta);
     u = await env.DB.prepare("SELECT * FROM usuarios WHERE ms_oid = ? AND activo = 1").bind(clave).first();
     if (!u) u = await env.DB.prepare("SELECT * FROM usuarios WHERE lower(usuario) = ? AND activo = 1 AND ms_oid IS NULL").bind(cuenta).first();

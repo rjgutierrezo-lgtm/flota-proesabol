@@ -20,6 +20,9 @@ function Validar($usuario, $password) {
   $u = $usuario -replace '^.*\\', '' -replace '@.*$', ''
   $u = $u.Trim().ToLower()
   if ($u -notmatch '^[a-z0-9._-]{1,64}$' -or -not $password) { return @{ ok = $false; error = "Usuario o contraseña incorrectos" } }
+  # Cuentas que nunca se validan por esta vía (administradores integrados y cuentas de sistema), más las de config.json "bloquear"
+  $prohibidas = @("administrator", "administrador", "admin", "krbtgt", "guest", "invitado") + @($cfg.bloquear | Where-Object { $_ } | ForEach-Object { "$_".ToLower() })
+  if ($prohibidas -contains $u) { return @{ ok = $false; error = "Usuario o contraseña incorrectos" } }
   # El dominio: el de config.json, o el de la máquina si está unida al dominio
   $dom = if ($cfg.dominio) { $cfg.dominio } elseif ($env:USERDNSDOMAIN) { $env:USERDNSDOMAIN } else { $null }
   if (-not $dom) { return @{ ok = $false; error = "Falta 'dominio' en config.json (ej: proesabol.loc)" } }
