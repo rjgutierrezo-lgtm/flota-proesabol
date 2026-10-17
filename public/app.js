@@ -40,7 +40,7 @@ async function boot(){
   const hm=location.hash.match(/^#ms=([0-9a-f]{64})$/); if(hm){ TOKEN=hm[1]; ls.set("ag-token",TOKEN); history.replaceState(null,"",location.pathname); } // vuelta del inicio de sesión con Microsoft
   const he=location.hash.match(/^#mserr=(.+)$/); if(he){ history.replaceState(null,"",location.pathname); setTimeout(()=>{ $("lgErr").textContent=decodeURIComponent(he[1]); },50); }
   api("setup").then(s=>{ if(s.sso){ $("msBox").classList.remove("hidden"); if(!s.microsoft){ $("msBtn").innerHTML="🏢 "+esc(s.sso); $("msBox").querySelector("p").textContent="o con tu usuario de la red"; } }
-    if(s.ad){ $("lgDomBox").classList.remove("hidden"); $("lgDomTxt").textContent=s.ad_nombre; $("lgDom").checked=ls.get("ag-dom")==="1"; $("lgDom").onchange=()=>ls.set("ag-dom",$("lgDom").checked?"1":"0"); } }).catch(()=>{});
+    if(s.ad){ $("lgDomBox").classList.remove("hidden"); $("lgDomTxt").textContent=s.ad_nombre; $("lgDom").checked=true; } }).catch(()=>{}); // con el agente AD conectado, la casilla viene siempre marcada
   if(TOKEN){ try{ const u=(await api("login")).usuario; ls.set("ag-user",JSON.stringify(u)); setUser(u); return startApp(); }
     catch(e){ const c=ls.get("ag-user"); if(e.offline&&c){ OFFLINE=true; setUser(JSON.parse(c)); return startApp(); } } }
   const hv=location.hash.match(/^#v=([a-f0-9]+)/i); if(hv) return fichaPublica(hv[1]); // QR escaneado sin sesión: ficha pública del vehículo
