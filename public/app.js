@@ -37,6 +37,9 @@ const val=(b,s)=>b.querySelector(s)?.value??"";
 // ===================== Inicio, instalación y login =====================
 function show(v){ ["vSetup","vLogin","vApp","vPub"].forEach(x=>$(x).classList.toggle("hidden",x!==v)); }
 async function boot(){
+  const hm=location.hash.match(/^#ms=([0-9a-f]{64})$/); if(hm){ TOKEN=hm[1]; ls.set("ag-token",TOKEN); history.replaceState(null,"",location.pathname); } // vuelta del inicio de sesión con Microsoft
+  const he=location.hash.match(/^#mserr=(.+)$/); if(he){ history.replaceState(null,"",location.pathname); setTimeout(()=>{ $("lgErr").textContent=decodeURIComponent(he[1]); },50); }
+  api("setup").then(s=>{ if(s.microsoft) $("msBox").classList.remove("hidden"); }).catch(()=>{});
   if(TOKEN){ try{ const u=(await api("login")).usuario; ls.set("ag-user",JSON.stringify(u)); setUser(u); return startApp(); }
     catch(e){ const c=ls.get("ag-user"); if(e.offline&&c){ OFFLINE=true; setUser(JSON.parse(c)); return startApp(); } } }
   const hv=location.hash.match(/^#v=([a-f0-9]+)/i); if(hv) return fichaPublica(hv[1]); // QR escaneado sin sesión: ficha pública del vehículo
@@ -215,13 +218,14 @@ async function viewSucursales(){ ALLSUCS=(await api("m/sucursales")).items;
 const PRESETS={Administrador:["registrar","mantenimiento","vehiculos","reportes","sucursales","usuarios"],"Jefe de flota":["registrar","mantenimiento","vehiculos","reportes"],"Conductor":["registrar"]};
 async function viewUsuarios(){ const j=await api("usuarios"); ALLSUCS=(await api("m/sucursales")).items; await cargarCond(); await cargarVeh();
   $("main").innerHTML=`<h2>Usuarios y permisos</h2><div class="toolbar"><button id="unew">+ Nuevo usuario</button></div><p class="muted">A cada chofer puedes enlazarle su ficha de conductor y un vehículo predeterminado: al abrir Registrar ya salen elegidos.</p><div class="card tbl"><table><thead><tr><th>Nombre</th><th>Usuario</th><th>Conductor / vehículo</th><th>Parqueos</th><th>Permisos</th><th>Estado</th></tr></thead><tbody>
-    ${j.usuarios.map(u=>`<tr class="click" data-id="${u.id}"><td>${esc(u.nombre)}</td><td>${esc(u.usuario)}</td><td><small>${u.conductor?"👤 "+esc(u.conductor):""}${u.conductor&&u.placa?" · ":""}${u.placa?"🚚 "+esc(u.placa):""}</small></td><td><small>${u.sucursales.length?u.sucursales.map(sucName).map(esc).join(", "):"Todas"}</small></td>
+    ${j.usuarios.map(u=>`<tr class="click" data-id="${u.id}"><td>${esc(u.nombre)}</td><td>${esc(u.usuario)}${u.email?`<br><small class="muted">${esc(u.email)}${u.ms_vinculado?" ✓":""}</small>`:""}</td><td><small>${u.conductor?"👤 "+esc(u.conductor):""}${u.conductor&&u.placa?" · ":""}${u.placa?"🚚 "+esc(u.placa):""}</small></td><td><small>${u.sucursales.length?u.sucursales.map(sucName).map(esc).join(", "):"Todas"}</small></td>
       <td>${u.permisos.map(p=>`<span class="chip">${esc(j.permisos[p]||p)}</span>`).join(" ")}</td><td>${u.activo?'<span class="chip ok">Activo</span>':'<span class="chip bad">Inactivo</span>'}</td></tr>`).join("")}</tbody></table></div>`;
   $("unew").onclick=()=>userForm(null,j.permisos); document.querySelectorAll("#main tr[data-id]").forEach(tr=>tr.onclick=()=>userForm(j.usuarios.find(u=>u.id==tr.dataset.id),j.permisos)); }
 function userForm(u,P){ const perms=new Set(u?u.permisos:PRESETS.Conductor), sucs=new Set(u?u.sucursales:[]);
   dialog(`<h3>${u?"Editar usuario":"Nuevo usuario"}</h3><div class="row"><div class="field"><label>Nombre</label><input id="un" value="${esc(u?.nombre||"")}"></div>
     <div class="field"><label>Usuario (único en toda la plataforma)</label><input id="uu" value="${esc(u?.usuario||"")}" ${u?"disabled":""} autocapitalize="none" placeholder="ej: ana.${esc(EMP.slug)}"></div></div>
-    <div class="field"><label>${u?"Nueva contraseña (vacía = no cambia)":"Contraseña (mínimo 8)"}</label><input id="up" type="password" autocomplete="new-password"></div>
+    <div class="row"><div class="field"><label>${u?"Nueva contraseña (vacía = no cambia)":"Contraseña (mínimo 8)"}</label><input id="up" type="password" autocomplete="new-password"></div>
+      <div class="field"><label>Correo de la empresa (Entrar con Microsoft)${u?.ms_vinculado?' <span class="chip ok">vinculado</span>':""}</label><input id="ue" type="email" value="${esc(u?.email||"")}" placeholder="nombre@empresa.com"></div></div>
     <div class="row"><div class="field"><label>Ficha de conductor</label><select id="uc"><option value="">Sin ficha de conductor</option><option value="nuevo">➕ Crear ficha con este nombre</option>${COND.filter(c=>c.activo||c.id===u?.conductor_id).map(c=>`<option value="${c.id}" ${c.id===u?.conductor_id?"selected":""}>${esc(c.nombre)}</option>`).join("")}</select></div>
       <div class="field"><label>Vehículo predeterminado</label><select id="uv"><option value="">Ninguno (elige al registrar)</option>${VEH.filter(v=>v.estado!=="baja"||v.id===u?.vehiculo_id).map(v=>`<option value="${v.id}" ${v.id===u?.vehiculo_id?"selected":""}>${esc(v.placa)} · ${esc(v.marca)} ${esc(v.modelo)}${v.conductor?" · "+esc(v.conductor):""}</option>`).join("")}</select></div></div>
     <p class="muted" style="margin-top:-6px">Con la ficha, cada registro guarda que este usuario manejaba. Con el vehículo, Registrar se abre con ese vehículo elegido.</p>
@@ -234,7 +238,7 @@ function userForm(u,P){ const perms=new Set(u?u.permisos:PRESETS.Conductor), suc
     b.querySelectorAll("[data-pre]").forEach(x=>x.onclick=()=>{ const s=PRESETS[x.dataset.pre]; b.querySelectorAll("[data-perm]").forEach(c=>c.checked=s.includes(c.dataset.perm)); });
     b.querySelector("#ux").onclick=closeDlg;
     b.querySelector("#uok").onclick=async()=>{ b.querySelector("#uerr").textContent="";
-      const body={nombre:val(b,"#un"),permisos:[...b.querySelectorAll("[data-perm]:checked")].map(c=>c.dataset.perm),sucursales:[...b.querySelectorAll("[data-suc]:checked")].map(c=>+c.dataset.suc),conductor_id:val(b,"#uc"),vehiculo_id:val(b,"#uv")};
+      const body={nombre:val(b,"#un"),email:val(b,"#ue"),permisos:[...b.querySelectorAll("[data-perm]:checked")].map(c=>c.dataset.perm),sucursales:[...b.querySelectorAll("[data-suc]:checked")].map(c=>+c.dataset.suc),conductor_id:val(b,"#uc"),vehiculo_id:val(b,"#uv")};
       const pw=val(b,"#up"); if(pw) body.password=pw; if(u){ body.id=u.id; body.activo=b.querySelector("#ua").checked; } else body.usuario=val(b,"#uu");
       try{ await api("usuarios",{body}); closeDlg(); toast("Usuario guardado"); go("usuarios"); }catch(e){ b.querySelector("#uerr").textContent=e.message; } }; }); }
 

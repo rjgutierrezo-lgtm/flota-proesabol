@@ -3,7 +3,7 @@
 import { json, err, int, txt, sesion, puede, hashPass, randomHex, validUser, revisarLimite, PERMISOS, ITER, E } from "../../lib/db.js";
 export async function onRequestGet({ request, env }) {
   const u = await sesion(request, env); if (!puede(u, "usuarios")) return err("Sin permiso", 403);
-  const { results } = await env.DB.prepare(`SELECT u.id, u.usuario, u.nombre, u.permisos, u.sucursales, u.activo, u.creado, u.conductor_id, u.vehiculo_id, c.nombre AS conductor, v.placa
+  const { results } = await env.DB.prepare(`SELECT u.id, u.usuario, u.nombre, u.permisos, u.sucursales, u.activo, u.creado, u.conductor_id, u.vehiculo_id, u.email, u.ms_oid IS NOT NULL AS ms_vinculado, c.nombre AS conductor, v.placa
     FROM usuarios u LEFT JOIN conductores c ON c.id = u.conductor_id LEFT JOIN vehiculos v ON v.id = u.vehiculo_id WHERE u.empresa_id = ? ORDER BY u.nombre`).bind(E(u)).all();
   results.forEach(r => { r.permisos = JSON.parse(r.permisos || "[]"); r.sucursales = JSON.parse(r.sucursales || "[]"); });
   return json({ ok: true, usuarios: results, permisos: PERMISOS });
@@ -31,6 +31,9 @@ export async function onRequestPost({ request, env }) {
     if (id === u.id && (b.activo === false || (perms && !perms.includes("usuarios")))) return err("No puedes quitarte tu propio acceso de administrador");
     const sets = [], vals = [], en = await enlaces(env, E(u), b, txt(b.nombre, 80) || cur.nombre);
     if (b.nombre !== undefined) { sets.push("nombre=?"); vals.push(txt(b.nombre, 80)); }
+    if (b.email !== undefined) { const em = txt(b.email, 120).toLowerCase(); if (em && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return err("El correo no es válido");
+      if (em && await env.DB.prepare("SELECT 1 FROM usuarios WHERE lower(email) = ? AND id <> ?").bind(em, id).first()) return err("Ese correo ya está en otro usuario");
+      sets.push("email=?", "ms_oid=CASE WHEN lower(email) = ? THEN ms_oid ELSE NULL END"); vals.push(em, em); } // si cambia el correo se vuelve a vincular con Microsoft
     if (perms) { sets.push("permisos=?"); vals.push(JSON.stringify(perms)); }
     if (sucs) { sets.push("sucursales=?"); vals.push(JSON.stringify(sucs)); }
     if (b.activo !== undefined) { sets.push("activo=?"); vals.push(b.activo ? 1 : 0); }
@@ -46,8 +49,10 @@ export async function onRequestPost({ request, env }) {
   if (!validUser(usuario)) return err("Usuario: 3 a 60 letras, números, punto, guion o @");
   if (pass.length < 8) return err("La contraseña debe tener al menos 8 caracteres");
   if (await env.DB.prepare("SELECT 1 FROM usuarios WHERE usuario = ?").bind(usuario).first()) return err("Ese nombre de usuario ya está en uso en la plataforma. Prueba otro (ej: ana.tienda)");
+  const em = txt(b.email, 120).toLowerCase(); if (em && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return err("El correo no es válido");
+  if (em && await env.DB.prepare("SELECT 1 FROM usuarios WHERE lower(email) = ?").bind(em).first()) return err("Ese correo ya está en otro usuario");
   const en = await enlaces(env, E(u), b, nombre), salt = randomHex(16);
-  const r = await env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, permisos, sucursales, iter, conductor_id, vehiculo_id) VALUES(?,?,?,?,?,?,?,?,?,?)")
-    .bind(E(u), usuario, nombre, await hashPass(pass, salt), salt, JSON.stringify(perms || ["registrar"]), JSON.stringify(sucs || []), ITER, en.conductor_id ?? null, en.vehiculo_id ?? null).run();
+  const r = await env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, permisos, sucursales, iter, conductor_id, vehiculo_id, email) VALUES(?,?,?,?,?,?,?,?,?,?,?)")
+    .bind(E(u), usuario, nombre, await hashPass(pass, salt), salt, JSON.stringify(perms || ["registrar"]), JSON.stringify(sucs || []), ITER, en.conductor_id ?? null, en.vehiculo_id ?? null, em).run();
   return json({ ok: true, id: r.meta.last_row_id, conductor_id: en.conductor_id ?? null });
 }

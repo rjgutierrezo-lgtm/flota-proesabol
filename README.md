@@ -39,6 +39,12 @@ Para el límite de intentos de login y el bloqueo por IP la app usa D1. Si quier
 | `MAIL_ADMIN` | Correo del dueño de la plataforma: recibe un aviso cada vez que una empresa se registra desde la landing. |
 | `REGISTRO_ABIERTO` | `0` cierra el registro de empresas desde la landing (por defecto está abierto, con 30 días de prueba). |
 
+### Inicio de sesión con Microsoft (Entra ID / Microsoft 365)
+
+Con las variables `MS_CLIENT_ID`, `MS_CLIENT_SECRET` y `MS_TENANT` (id del directorio de la empresa, u `organizations` para aceptar cualquier cuenta de trabajo) aparece el botón **Entrar con Microsoft** en la pantalla de ingreso. Registro de la aplicación en el portal de Microsoft Entra: tipo *Web*, URI de redirección `https://TU-DOMINIO/api/ms/callback`, permisos `openid`, `profile`, `email`, y un secreto de cliente.
+
+Cada usuario de FlotaControl se vincula por su correo: el administrador lo escribe en **Usuarios → Correo de la empresa**; la primera vez que esa persona entra con Microsoft, su cuenta queda enlazada. Quien no tenga correo cargado no puede entrar por esa vía. Las contraseñas propias siguen funcionando.
+
 ### Recordatorio diario automático
 
 El endpoint `GET /api/recordatorios?key=CRON_KEY` genera el resumen de cada empresa (mantenimientos vencidos y próximos, documentos por vencer, presupuesto superado, repuestos bajo mínimo) y lo envía al correo configurado en **Empresa → Recordatorio diario**. No repite el envío si ya se hizo ese día.

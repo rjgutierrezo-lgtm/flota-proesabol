@@ -24,3 +24,6 @@ SETUP_KEY = "cambia-esta-clave"
 # CRON_KEY = "clave-para-el-cron"             # GET /api/recordatorios?key=...  (si falta se usa SETUP_KEY)
 # MAIL_ADMIN = "tu@correo.com"                # aviso cuando una empresa se registra desde la landing
 # REGISTRO_ABIERTO = "0"                      # cierra el registro desde la landing
+# MS_CLIENT_ID = "..."                      # Entrar con Microsoft (Entra ID): id de aplicación
+# MS_CLIENT_SECRET = "..."                  # secreto de cliente (como secreto en Cloudflare)
+# MS_TENANT = "organizations"               # id del directorio de la empresa, u "organizations"
