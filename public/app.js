@@ -266,6 +266,8 @@ function userForm(u,P){ const perms=new Set(u?u.permisos:PRESETS.Conductor), suc
     b.querySelector("#ux").onclick=closeDlg;
     b.querySelector("#uok").onclick=async()=>{ b.querySelector("#uerr").textContent="";
       const body={nombre:val(b,"#un"),email:val(b,"#ue"),permisos:[...b.querySelectorAll("[data-perm]:checked")].map(c=>c.dataset.perm),sucursales:[...b.querySelectorAll("[data-suc]:checked")].map(c=>+c.dataset.suc),conductor_id:val(b,"#uc"),vehiculo_id:val(b,"#uv")};
+      // un usuario que no administra la empresa y sin parqueos marcados ve TODOS los parqueos: se pide confirmarlo
+      if(!body.permisos.includes("usuarios")&&!body.sucursales.length&&ALLSUCS.filter(s=>s.activo).length>1&&!await confirmar(`${body.nombre||"Este usuario"} no tiene parqueos marcados, así que verá los vehículos y recibirá las alertas de TODOS los parqueos. Para limitarlo a su base, cancela y marca su parqueo.`,{ok:"Sí, que vea todos",cancelar:"Cancelar"})) return;
       const pw=val(b,"#up"); if(pw) body.password=pw; if(u){ body.id=u.id; body.activo=b.querySelector("#ua").checked; } else body.usuario=val(b,"#uu");
       try{ await api("usuarios",{body}); closeDlg(); toast("Usuario guardado"); go("usuarios"); }catch(e){ b.querySelector("#uerr").textContent=e.message; } }; }); }
 

@@ -4,14 +4,15 @@
 // GET ?historial=1 (permiso "usuarios") → últimos envíos de la empresa.
 import { json, err, int, sesion, puede, sameStr, hoyTZ, bloqueo, PERFIL_EMPRESA, E } from "../../lib/db.js";
 import { resumenEmpresa, enviarCorreo } from "../../lib/resumen.js";
-import { notificar, supervisores } from "../../lib/push.js";
+import { notificar, supervisoresPorAlcance } from "../../lib/push.js";
 async function procesar(env, e, canal) {
   const R = await resumenEmpresa(env, e);
   const asunto = `${e.nombre}: ${R.pendientes ? R.pendientes + " pendientes de flota" : "flota al día"} · ${R.hoy}`;
   const envio = e.email_avisos ? await enviarCorreo(env, e.email_avisos, asunto, R.texto) : { ok: false, error: "La empresa no tiene correo de avisos configurado" };
-  // el mismo resumen como notificación en el celular de los supervisores
-  const partes = [[R.vencidos.length, "vencido"], [R.proximos.length, "próximo"], [R.documentos.length, "documento"], [R.presupuestos.length, "presupuesto superado"], [R.repuestos.length, "repuesto bajo mínimo"]].filter(x => x[0]).map(([n, t]) => `${n} ${t}${n > 1 && !t.includes(" ") ? "s" : ""}`);
-  let push = 0; try { push = await notificar(env, await supervisores(env, e.id, null), { title: `🚚 ${e.nombre}: resumen del día`, body: partes.length ? partes.join(" · ") : "✅ Flota al día, sin pendientes", url: "/", tag: "resumen" }); } catch (x) { /* sin push */ }
+  // el resumen como notificación en el celular de cada supervisor, calculado solo con sus parqueos
+  const cuerpo = X => { const p = [[X.vencidos.length, "vencido"], [X.proximos.length, "próximo"], [X.documentos.length, "documento"], [X.presupuestos.length, "presupuesto superado"], [X.repuestos.length, "repuesto bajo mínimo"]].filter(x => x[0]).map(([n, t]) => `${n} ${t}${n > 1 && !t.includes(" ") ? "s" : ""}`); return p.length ? p.join(" · ") : "✅ Flota al día, sin pendientes"; };
+  let push = 0; try { for (const g of await supervisoresPorAlcance(env, e.id)) { const X = g.sucs.length ? await resumenEmpresa(env, e, g.sucs) : R;
+      push += await notificar(env, g.ids, { title: `🚚 ${e.nombre}: resumen del día`, body: cuerpo(X), url: "/", tag: "resumen" }); } } catch (x) { /* sin push */ }
   await env.DB.prepare("INSERT INTO recordatorios(empresa_id, fecha, canal, destino, resumen, ok) VALUES(?,?,?,?,?,?)").bind(e.id, R.hoy, canal, e.email_avisos || "", R.texto, envio.ok || push ? 1 : 0).run();
   return { ...R, enviado: envio.ok, push, error: envio.error || null };
 }
