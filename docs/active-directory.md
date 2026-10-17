@@ -1,5 +1,11 @@
 # Entrar a FlotaControl con el usuario del Active Directory local
 
+Hay dos maneras. La **simple**, recomendada para la mayoría: el agente de la carpeta `agente-ad/` (un script de PowerShell que corre en cualquier PC de la red unida al dominio, sin instalar nada en el controlador de dominio); su guía está en `agente-ad/LEEME.md`. Con ella, el usuario escribe su usuario y contraseña de Windows directamente en la pantalla de FlotaControl.
+
+La que sigue es la **estándar**, con Keycloak: más trabajo, pero la contraseña nunca sale de la red y sirve para conectar otras aplicaciones.
+
+---
+
 Escenario: la empresa tiene Active Directory en un Windows Server de la oficina, sin Microsoft 365. La app corre en Cloudflare y no puede hablar con el AD directamente, así que se instala **Keycloak** (servidor de identidad gratuito, de Red Hat) dentro de la red, se le conecta al AD por LDAP y se publica hacia internet con un **túnel de Cloudflare**, sin abrir ningún puerto en el router. Las contraseñas nunca salen de la red: el usuario las escribe en la pantalla de Keycloak, que las valida contra el AD.
 
 Tiempo estimado: 1 a 2 horas para quien administra el servidor.

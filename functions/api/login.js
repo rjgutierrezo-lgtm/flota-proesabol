@@ -15,14 +15,30 @@ export async function onRequestPost({ request, env }) {
   const usuario = txt(b.usuario, 60).toLowerCase(), ip = request.headers.get("cf-connecting-ip") || "";
   const claves = ["u:" + usuario, ...(ip ? ["ip:" + ip] : [])];
   const bq0 = await intentosBloqueado(env, claves); if (bq0) return err(bq0, 429);
-  const u = await env.DB.prepare("SELECT * FROM usuarios WHERE usuario = ? AND activo = 1").bind(usuario).first();
-  const h = u ? await hashPass(String(b.password || ""), u.salt, u.iter || 20000) : await hashPass("x", "y", 20000);
-  if (!u || !sameStr(h, u.hash)) { await intentoFallido(env, claves); return err("Usuario o contraseña incorrectos", 401); }
+  let u;
+  if (b.dominio) { // usuario de Windows: lo valida el agente AD instalado en la red de la empresa (agente-ad/)
+    if (!env.AD_URL || !env.AD_SECRETO) return err("El ingreso con usuario de dominio no está configurado", 404);
+    let r; try {
+      const resp = await fetch(String(env.AD_URL).replace(/\/$/, "") + "/validar", { method: "POST", headers: { "content-type": "application/json", "x-agente-secreto": env.AD_SECRETO }, body: JSON.stringify({ usuario, password: String(b.password || "") }), signal: AbortSignal.timeout(8000) });
+      r = await resp.json();
+    } catch (e) { return err("No se pudo contactar con el servidor de la empresa. Intenta de nuevo o usa tu contraseña de FlotaControl.", 502); }
+    if (!r?.ok) { await intentoFallido(env, claves); return err(r?.error || "Usuario o contraseña incorrectos", 401); }
+    const cuenta = String(r.cuenta || usuario).toLowerCase().replace(/^.*\\/, "").replace(/@.*$/, ""), correo = String(r.correo || "").toLowerCase(), clave = "ad:" + (r.sid || cuenta);
+    u = await env.DB.prepare("SELECT * FROM usuarios WHERE ms_oid = ? AND activo = 1").bind(clave).first();
+    if (!u) u = await env.DB.prepare("SELECT * FROM usuarios WHERE lower(usuario) = ? AND activo = 1 AND ms_oid IS NULL").bind(cuenta).first();
+    if (!u && correo) u = await env.DB.prepare("SELECT * FROM usuarios WHERE lower(email) = ? AND activo = 1 AND ms_oid IS NULL").bind(correo).first();
+    if (!u) return err(`La cuenta de dominio ${cuenta} es válida, pero no está vinculada a ningún usuario de FlotaControl. Pide al administrador que cree tu usuario con ese nombre o con tu correo.`, 403);
+    if (u.ms_oid !== clave) await env.DB.prepare("UPDATE usuarios SET ms_oid = ? WHERE id = ?").bind(clave, u.id).run();
+  } else {
+    u = await env.DB.prepare("SELECT * FROM usuarios WHERE usuario = ? AND activo = 1").bind(usuario).first();
+    const h = u ? await hashPass(String(b.password || ""), u.salt, u.iter || 20000) : await hashPass("x", "y", 20000);
+    if (!u || !sameStr(h, u.hash)) { await intentoFallido(env, claves); return err("Usuario o contraseña incorrectos", 401); }
+  }
   if (!u.super) { const e = await env.DB.prepare("SELECT activo, vence FROM empresas WHERE id = ?").bind(u.empresa_id).first(); const bq = bloqueo(e); if (bq) return err(bq, 403); }
   const token = randomHex(32), st = [env.DB.prepare("DELETE FROM sesiones WHERE expira < datetime('now')"),
     env.DB.prepare("INSERT INTO sesiones(token, usuario_id, expira) VALUES(?, ?, datetime('now', '+30 days'))").bind(token, u.id)];
   // contraseñas guardadas con menos iteraciones: se vuelven a cifrar con el valor actual
-  if ((u.iter || 20000) < ITER) { const salt = randomHex(16); st.push(env.DB.prepare("UPDATE usuarios SET salt = ?, hash = ?, iter = ? WHERE id = ?").bind(salt, await hashPass(String(b.password || ""), salt), ITER, u.id)); }
+  if (!b.dominio && (u.iter || 20000) < ITER) { const salt = randomHex(16); st.push(env.DB.prepare("UPDATE usuarios SET salt = ?, hash = ?, iter = ? WHERE id = ?").bind(salt, await hashPass(String(b.password || ""), salt), ITER, u.id)); }
   await env.DB.batch(st); await intentosLimpiar(env, claves);
   u.permisos = JSON.parse(u.permisos || "[]");
   return json({ ok: true, token, usuario: await perfil(env, u) });

@@ -44,7 +44,8 @@ Para el límite de intentos de login y el bloqueo por IP la app usa D1. Si quier
 La app acepta cualquier proveedor OpenID Connect. Dos configuraciones típicas:
 
 - **Microsoft 365 / Entra ID**: variables `MS_CLIENT_ID`, `MS_CLIENT_SECRET` y `MS_TENANT` (id del directorio, u `organizations`). Registro en el portal de Entra: tipo *Web*, URI de redirección `https://TU-DOMINIO/api/ms/callback`, permisos `openid profile email`, secreto de cliente. Botón "Entrar con Microsoft".
-- **Active Directory local** (Windows Server, sin Microsoft 365): se instala Keycloak en la red de la empresa con federación LDAP al AD, se publica con un túnel de Cloudflare y se configuran `OIDC_ISSUER` (por ejemplo `https://id.empresa.com/realms/empresa`), `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` y opcionalmente `OIDC_NOMBRE` (texto del botón). Guía en `docs/active-directory.md`.
+- **Active Directory local, forma simple**: el agente de `agente-ad/` (PowerShell, corre en cualquier PC de la red unida al dominio) valida usuario y contraseña de Windows; se publica con un túnel de Cloudflare y se configuran `AD_URL`, `AD_SECRETO` y opcionalmente `AD_NOMBRE`. En la pantalla de ingreso aparece la casilla "Entrar con mi usuario de Windows". Guía en `agente-ad/LEEME.md`.
+- **Active Directory local, forma estándar** (Keycloak): se instala Keycloak en la red de la empresa con federación LDAP al AD, se publica con un túnel de Cloudflare y se configuran `OIDC_ISSUER` (por ejemplo `https://id.empresa.com/realms/empresa`), `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` y opcionalmente `OIDC_NOMBRE` (texto del botón). Guía en `docs/active-directory.md`.
 
 Vinculación de cada usuario, en este orden: identidad ya enlazada; correo igual al de **Usuarios → Correo de la empresa**; o nombre de usuario de FlotaControl igual al nombre de cuenta del dominio. Quien no coincida con nada no puede entrar por esa vía. Las contraseñas propias siguen funcionando.
 

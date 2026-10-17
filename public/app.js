@@ -39,7 +39,8 @@ function show(v){ ["vSetup","vLogin","vApp","vPub"].forEach(x=>$(x).classList.to
 async function boot(){
   const hm=location.hash.match(/^#ms=([0-9a-f]{64})$/); if(hm){ TOKEN=hm[1]; ls.set("ag-token",TOKEN); history.replaceState(null,"",location.pathname); } // vuelta del inicio de sesión con Microsoft
   const he=location.hash.match(/^#mserr=(.+)$/); if(he){ history.replaceState(null,"",location.pathname); setTimeout(()=>{ $("lgErr").textContent=decodeURIComponent(he[1]); },50); }
-  api("setup").then(s=>{ if(s.sso){ $("msBox").classList.remove("hidden"); if(!s.microsoft){ $("msBtn").innerHTML="🏢 "+esc(s.sso); $("msBox").querySelector("p").textContent="o con tu usuario de la red"; } } }).catch(()=>{});
+  api("setup").then(s=>{ if(s.sso){ $("msBox").classList.remove("hidden"); if(!s.microsoft){ $("msBtn").innerHTML="🏢 "+esc(s.sso); $("msBox").querySelector("p").textContent="o con tu usuario de la red"; } }
+    if(s.ad){ $("lgDomBox").classList.remove("hidden"); $("lgDomTxt").textContent=s.ad_nombre; $("lgDom").checked=ls.get("ag-dom")==="1"; $("lgDom").onchange=()=>ls.set("ag-dom",$("lgDom").checked?"1":"0"); } }).catch(()=>{});
   if(TOKEN){ try{ const u=(await api("login")).usuario; ls.set("ag-user",JSON.stringify(u)); setUser(u); return startApp(); }
     catch(e){ const c=ls.get("ag-user"); if(e.offline&&c){ OFFLINE=true; setUser(JSON.parse(c)); return startApp(); } } }
   const hv=location.hash.match(/^#v=([a-f0-9]+)/i); if(hv) return fichaPublica(hv[1]); // QR escaneado sin sesión: ficha pública del vehículo
@@ -51,7 +52,7 @@ $("suBtn").onclick=async()=>{ $("suErr").textContent="";
     $("lgUser").value=$("suUser").value; toast("Usuario de plataforma creado. Ahora ingresa."); show("vLogin"); }catch(e){ $("suErr").textContent=e.message; } };
 function setUser(u){ USER=u; EMP=u.empresa||null; SUCS=u.sucursales||[]; const saved=+ls.get("ag-suc-"+u.id); SUC=SUCS.some(s=>s.id===saved)?saved:(SUCS[0]?.id||null); }
 async function doLogin(){ $("lgErr").textContent=""; $("lgBtn").disabled=true;
-  try{ const j=await api("login",{body:{usuario:$("lgUser").value,password:$("lgPass").value}}); TOKEN=j.token; ls.set("ag-token",TOKEN); ls.set("ag-user",JSON.stringify(j.usuario)); $("lgPass").value=""; setUser(j.usuario); startApp(); }
+  try{ const j=await api("login",{body:{usuario:$("lgUser").value,password:$("lgPass").value,dominio:!!$("lgDom")?.checked}}); TOKEN=j.token; ls.set("ag-token",TOKEN); ls.set("ag-user",JSON.stringify(j.usuario)); $("lgPass").value=""; setUser(j.usuario); startApp(); }
   catch(e){ $("lgErr").textContent=e.message; } $("lgBtn").disabled=false; }
 $("lgForm").onsubmit=e=>{ e.preventDefault(); doLogin(); };
 function logoutLocal(){ endTour(); TOKEN=null; USER=null; ls.del("ag-token"); ls.del("ag-user"); pintarCola(); const b=$("bnav"); if(b) b.remove(); show("vLogin"); }
