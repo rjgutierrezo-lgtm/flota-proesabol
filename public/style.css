@@ -101,7 +101,7 @@ dialog::backdrop{background:rgba(10,15,30,.5)}.dlg{padding:18px}.dlg .acts{displ
 @media (max-width:720px){
   html,body{overflow-x:hidden}
   nav#nav{display:none}#bnav{display:flex}
-  .topin{padding:8px 12px;gap:8px}.brand{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:1rem}#who,#helpBtn,#logout{display:none}
+  .topin{padding:8px 12px;gap:8px}.brand{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:1rem}#who,#helpBtn,#notifBtn,#logout{display:none}
   .sucsel{max-width:46%}.sucsel select{padding:6px 8px;font-size:.85rem}
   body{padding-bottom:calc(74px + env(safe-area-inset-bottom,0px))}
   main{padding:12px}h2{font-size:1.25rem}.card{padding:14px;border-radius:14px}

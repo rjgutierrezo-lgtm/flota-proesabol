@@ -77,6 +77,7 @@ let CUR=null;
 async function startApp(){ show("vApp"); $("who").textContent=USER.nombre;
   if(!$("helpBtn")){ const hb=document.createElement("button"); hb.id="helpBtn"; hb.className="sec"; hb.title="¿Cómo se usa esta pantalla?"; hb.setAttribute("aria-label","Ayuda de esta pantalla"); hb.textContent="?";
     hb.onclick=()=>startTour(CUR,true); $("logout").before(hb); }
+  if(!$("notifBtn")&&pushSoportado()){ const nb=document.createElement("button"); nb.id="notifBtn"; nb.className="sec"; nb.title="Notificaciones en este equipo"; nb.setAttribute("aria-label","Notificaciones"); nb.textContent="🔔"; nb.style.cssText="width:38px;height:38px;padding:0;border-radius:50%"; nb.onclick=notifDlg; $("helpBtn").before(nb); }
   $("brand").textContent=USER.super?"Plataforma":EMP.nombre; document.title=(USER.super?"Plataforma":EMP.nombre)+" · FlotaControl";
   if(!USER.super){ try{ ALLSUCS=(await api("m/sucursales")).items; }catch(e){ ALLSUCS=SUCS; } }
   drawSucSel(); drawAviso();
@@ -86,9 +87,34 @@ async function startApp(){ show("vApp"); $("who").textContent=USER.nombre;
   if(!USER.super&&!SUCS.length){ $("main").innerHTML=`<div class="card">Tu usuario no tiene sucursales asignadas o no hay sucursales activas.</div>`; }
   const hv=location.hash.match(/^#v=([a-f0-9]+)/i);
   if(hv&&!USER.super){ history.replaceState(null,"",location.pathname); try{ await cargarVeh(); const v=VEH.find(x=>x.codigo===hv[1].toLowerCase()); if(v&&(can("registrar")||can("mantenimiento"))){ PRESEL={vehiculo_id:v.id}; return go("registrar"); } }catch(e){} }
-  pintarCola(); enviarCola();
+  pintarCola(); enviarCola(); if(!OFFLINE) setTimeout(()=>ofrecerPush().catch(()=>{}),2500);
+  const hz=location.hash.slice(1); if(hz&&vs.some(v=>v.id===hz)){ history.replaceState(null,"",location.pathname); return go(hz); } // abrir desde una notificación
   if(OFFLINE){ OFFLINE=false; toast("Sin conexión: puedes registrar y se enviará cuando vuelva la señal"); if(vs.some(v=>v.id==="registrar")) return go("registrar"); }
   go(vs[0].id); }
+// ===================== Notificaciones push =====================
+const pushSoportado=()=>"serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;
+const b64u2u8=s=>Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/")+"=".repeat((4-s.length%4)%4)),c=>c.charCodeAt(0));
+async function subActual(){ try{ const reg=await navigator.serviceWorker.ready; return await reg.pushManager.getSubscription(); }catch(e){ return null; } }
+async function activarPush(){ if(!pushSoportado()) throw new Error("Este navegador no permite notificaciones. En iPhone, instala la app en la pantalla de inicio (iOS 16.4 o superior) y ábrela desde ahí.");
+  const p=await Notification.requestPermission(); if(p!=="granted") throw new Error("No se dio permiso. Actívalo en los ajustes del navegador para este sitio y vuelve a intentar.");
+  const reg=await navigator.serviceWorker.ready, {clave}=await api("push");
+  let sub=await reg.pushManager.getSubscription(); if(sub&&sub.options?.applicationServerKey&&b64uDe(sub.options.applicationServerKey)!==clave){ await sub.unsubscribe(); sub=null; }
+  if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u2u8(clave)});
+  await api("push",{body:{sub:sub.toJSON(),equipo:navigator.userAgent}}); ls.set("ag-push-ofrecido","1"); }
+const b64uDe=buf=>btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+async function notifDlg(){ const sub=await subActual(), on=!!sub&&Notification.permission==="granted";
+  dialog(`<h3>🔔 Notificaciones</h3><p>${on?'<span class="chip ok">Activas en este equipo</span>':'<span class="chip">Desactivadas en este equipo</span>'}</p>
+    <p class="muted">Recibes en el celular, aunque la app esté cerrada: ${can("reportes")||can("mantenimiento")?"alertas al momento cuando un registro tiene consumo anormal, kilometraje dudoso o factura repetida, y ":""}el resumen diario de mantenimientos y documentos.</p>
+    ${Notification.permission==="denied"?'<p class="err">El navegador tiene bloqueadas las notificaciones para este sitio. Desbloquéalas en los ajustes del sitio (candado junto a la dirección) y vuelve aquí.</p>':""}
+    <div class="err" id="nerr"></div><div class="acts">${on?`<button class="sec" id="noff">Desactivar</button><button class="sec" id="nprb">Enviar prueba</button>`:`<button id="non">Activar notificaciones</button>`}<button class="sec" id="nx">Cerrar</button></div>`, B=>{
+    B.querySelector("#nx").onclick=closeDlg;
+    const non=B.querySelector("#non"); if(non) non.onclick=async()=>{ non.disabled=true; try{ await activarPush(); toast("Notificaciones activadas"); notifDlg(); }catch(e){ B.querySelector("#nerr").textContent=e.message; non.disabled=false; } };
+    const noff=B.querySelector("#noff"); if(noff) noff.onclick=async()=>{ try{ await api("push",{body:{baja:sub.endpoint}}); await sub.unsubscribe(); toast("Notificaciones desactivadas"); notifDlg(); }catch(e){ B.querySelector("#nerr").textContent=e.message; } };
+    const nprb=B.querySelector("#nprb"); if(nprb) nprb.onclick=async()=>{ nprb.disabled=true; try{ await api("push",{body:{probar:true}}); toast("Prueba enviada: debería llegar en unos segundos"); }catch(e){ B.querySelector("#nerr").textContent=e.message; } nprb.disabled=false; }; }); }
+// Ofrece activar las notificaciones una sola vez por equipo
+async function ofrecerPush(){ if(!pushSoportado()||ls.get("ag-push-ofrecido")||Notification.permission!=="default") return; ls.set("ag-push-ofrecido","1");
+  if(await confirmar("¿Quieres recibir notificaciones en este equipo? Te avisamos de mantenimientos vencidos y de alertas de la flota, aunque la app esté cerrada.",{ok:"Activar",cancelar:"Ahora no"})){ try{ await activarPush(); toast("Notificaciones activadas"); }catch(e){ avisar(e.message); } } }
+if("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message",ev=>{ const v=ev.data?.ir; if(v&&USER&&VIEWS.some(x=>x.id===v&&x.ok())) go(v); });
 // Menú inferior para el teléfono: las 4 secciones principales y "Más" con el resto
 const BNAV_ICON={plataforma:"🏢",panel:"🏠",registrar:"➕",vehiculos:"🚚",mantenimiento:"🔧",historial:"🧾",reportes:"📊",conductores:"👤",proveedores:"🏪",repuestos:"📦",sucursales:"📍",usuarios:"👥",config:"⚙️"};
 let BNAV_MAIN=[];
@@ -97,10 +123,10 @@ function drawBnav(vs){ let b=$("bnav"); if(!b){ b=document.createElement("nav");
   b.innerHTML=main.map(v=>`<button data-v="${v.id}"><span class="i">${BNAV_ICON[v.id]||"•"}</span><span>${v.t}</span></button>`).join("")+`<button data-more="1"><span class="i">☰</span><span>Más</span></button>`;
   b.querySelectorAll("[data-v]").forEach(x=>x.onclick=()=>go(x.dataset.v));
   b.querySelector("[data-more]").onclick=()=>dialog(`<h3>Más</h3><div class="mas">${rest.map(v=>`<button class="sec" data-v="${v.id}"><span class="i">${BNAV_ICON[v.id]||"•"}</span>${esc(v.t)}</button>`).join("")}
-      <button class="sec" id="masHelp"><span class="i">❓</span>Ayuda de esta pantalla</button><button class="sec" id="masClose"><span class="i">✕</span>Cerrar</button>
+      ${pushSoportado()?`<button class="sec" id="masNotif"><span class="i">🔔</span>Notificaciones</button>`:""}<button class="sec" id="masHelp"><span class="i">❓</span>Ayuda de esta pantalla</button><button class="sec" id="masClose"><span class="i">✕</span>Cerrar</button>
       <div class="full muted" style="padding:6px 2px 0;font-size:.9rem">${esc(USER.nombre)}${EMP?` · ${esc(EMP.nombre)}`:""}</div><button class="danger full" id="masOut">🚪 Cerrar sesión</button></div>`, B=>{
     B.querySelectorAll("[data-v]").forEach(x=>x.onclick=()=>{ closeDlg(); go(x.dataset.v); }); B.querySelector("#masClose").onclick=closeDlg;
-    B.querySelector("#masHelp").onclick=()=>{ closeDlg(); startTour(CUR,true); }; B.querySelector("#masOut").onclick=()=>{ closeDlg(); $("logout").click(); }; }); }
+    B.querySelector("#masHelp").onclick=()=>{ closeDlg(); startTour(CUR,true); }; const mn=B.querySelector("#masNotif"); if(mn) mn.onclick=()=>notifDlg(); B.querySelector("#masOut").onclick=()=>{ closeDlg(); $("logout").click(); }; }); }
 function drawAviso(){ let a=$("aviso"); if(!a){ a=document.createElement("div"); a.id="aviso"; $("main").before(a); }
   const v=USER.aviso; a.innerHTML=v?`<div style="max-width:1200px;margin:12px auto 0;padding:0 16px"><div class="card" style="border-color:var(--${v.nivel});background:var(--${v.nivel}-soft);color:var(--${v.nivel});font-weight:600">${v.nivel==="bad"?"⛔":"⚠️"} ${esc(v.texto)}</div></div>`:""; }
 function drawSucSel(){ const w=$("sucWrap"); if(USER.super||!SUCS.length){ w.innerHTML=""; return; }

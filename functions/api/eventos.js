@@ -34,7 +34,8 @@ function validar(tipo, b, v) {
   const lleno = tipo === "combustible" ? (b.lleno === false ? 0 : 1) : 0;
   return { km, litros, monto, lleno, alertas, proveedor: txt(b.proveedor, 80), detalle: txt(b.detalle, 300), categoria: txt(b.categoria, 40), factura: txt(b.factura, 40), cuf: txt(b.cuf, 120).replace(/[^0-9A-Fa-f]/g, "").toUpperCase() || null };
 }
-export async function onRequestPost({ request, env }) {
+import { notificar, supervisores } from "../../lib/push.js";
+export async function onRequestPost({ request, env, waitUntil }) {
   const u = await sesion(request, env); if (!u || u.super) return err("Inicia sesión", 401);
   const b = await request.json().catch(() => ({}));
   const sucs = (await misSucursales(env, u)).map(s => s.id);
@@ -102,5 +103,10 @@ export async function onRequestPost({ request, env }) {
   if (plan) st.push(env.DB.prepare("UPDATE planes SET ultimo_km = ?, ultima_fecha = ? WHERE id = ?").bind(km ?? v.km_actual, fecha.slice(0, 10), plan.id));
   const r = await env.DB.batch(st);
   if (Math.random() < 0.05) { const emp = await env.DB.prepare(PERFIL_EMPRESA).bind(E(u)).first(); await limpiarFotos(env, E(u), emp.retencion_fotos); }
+  if (alertas.length) { // aviso inmediato a supervisores del parqueo (sin demorar la respuesta)
+    const envio = supervisores(env, E(u), v.sucursal_id, u.id).then(ids => notificar(env, ids, { title: `⚠️ ${v.placa}: ${({ combustible: "carga de combustible", mantenimiento: "mantenimiento", lavado: "lavado", gasto: "gasto", kilometraje: "kilometraje" })[tipo]}`,
+      body: alertas.join(" · ") + ` (registró ${u.nombre})`, url: "/#historial", tag: "alerta-" + v.id, urgente: true })).catch(() => {});
+    if (waitUntil) waitUntil(envio); else await envio;
+  }
   return json({ ok: true, id: r[0].meta.last_row_id, rendimiento, alertas });
 }

@@ -4,12 +4,16 @@
 // GET ?historial=1 (permiso "usuarios") → últimos envíos de la empresa.
 import { json, err, int, sesion, puede, sameStr, hoyTZ, bloqueo, PERFIL_EMPRESA, E } from "../../lib/db.js";
 import { resumenEmpresa, enviarCorreo } from "../../lib/resumen.js";
+import { notificar, supervisores } from "../../lib/push.js";
 async function procesar(env, e, canal) {
   const R = await resumenEmpresa(env, e);
   const asunto = `${e.nombre}: ${R.pendientes ? R.pendientes + " pendientes de flota" : "flota al día"} · ${R.hoy}`;
   const envio = e.email_avisos ? await enviarCorreo(env, e.email_avisos, asunto, R.texto) : { ok: false, error: "La empresa no tiene correo de avisos configurado" };
-  await env.DB.prepare("INSERT INTO recordatorios(empresa_id, fecha, canal, destino, resumen, ok) VALUES(?,?,?,?,?,?)").bind(e.id, R.hoy, canal, e.email_avisos || "", R.texto, envio.ok ? 1 : 0).run();
-  return { ...R, enviado: envio.ok, error: envio.error || null };
+  // el mismo resumen como notificación en el celular de los supervisores
+  const partes = [[R.vencidos.length, "vencido"], [R.proximos.length, "próximo"], [R.documentos.length, "documento"], [R.presupuestos.length, "presupuesto superado"], [R.repuestos.length, "repuesto bajo mínimo"]].filter(x => x[0]).map(([n, t]) => `${n} ${t}${n > 1 && !t.includes(" ") ? "s" : ""}`);
+  let push = 0; try { push = await notificar(env, await supervisores(env, e.id, null), { title: `🚚 ${e.nombre}: resumen del día`, body: partes.length ? partes.join(" · ") : "✅ Flota al día, sin pendientes", url: "/", tag: "resumen" }); } catch (x) { /* sin push */ }
+  await env.DB.prepare("INSERT INTO recordatorios(empresa_id, fecha, canal, destino, resumen, ok) VALUES(?,?,?,?,?,?)").bind(e.id, R.hoy, canal, e.email_avisos || "", R.texto, envio.ok || push ? 1 : 0).run();
+  return { ...R, enviado: envio.ok, push, error: envio.error || null };
 }
 export async function onRequestGet({ request, env }) {
   const q = new URL(request.url).searchParams;
@@ -20,17 +24,17 @@ export async function onRequestGet({ request, env }) {
   }
   const key = q.get("key") || "", esperada = env.CRON_KEY || env.SETUP_KEY || "";
   if (!esperada || !sameStr(key, esperada)) return err("Clave incorrecta", 401);
-  const { results } = await env.DB.prepare("SELECT * FROM empresas WHERE activo = 1 AND trim(COALESCE(email_avisos, '')) <> ''").all();
+  const { results } = await env.DB.prepare("SELECT * FROM empresas e WHERE activo = 1 AND (trim(COALESCE(email_avisos, '')) <> '' OR EXISTS (SELECT 1 FROM push_subs p WHERE p.empresa_id = e.id))").all();
   const out = [];
   for (const e of results) {
     if (bloqueo(e)) { out.push({ empresa: e.nombre, enviado: false, motivo: "suscripción vencida" }); continue; }
     const hoy = hoyTZ(e.tz);
     const ya = await env.DB.prepare("SELECT 1 FROM recordatorios WHERE empresa_id = ? AND fecha = ? AND canal = 'cron' AND ok = 1").bind(e.id, hoy).first();
     if (ya) { out.push({ empresa: e.nombre, enviado: false, motivo: "ya enviado hoy" }); continue; }
-    try { const r = await procesar(env, e, "cron"); out.push({ empresa: e.nombre, enviado: r.enviado, pendientes: r.pendientes, error: r.error }); }
+    try { const r = await procesar(env, e, "cron"); out.push({ empresa: e.nombre, enviado: r.enviado, push: r.push, pendientes: r.pendientes, error: r.error }); }
     catch (x) { out.push({ empresa: e.nombre, enviado: false, error: String(x.message || x) }); }
   }
-  return json({ ok: true, empresas: out.length, enviados: out.filter(x => x.enviado).length, detalle: out });
+  return json({ ok: true, empresas: out.length, enviados: out.filter(x => x.enviado || x.push).length, detalle: out });
 }
 export async function onRequestPost({ request, env }) {
   const u = await sesion(request, env); if (!puede(u, "usuarios")) return err("Sin permiso", 403);
