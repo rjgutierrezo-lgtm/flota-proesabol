@@ -3,7 +3,7 @@ import { json, err, txt, hashPass, randomHex, sameStr, validUser, ITER } from ".
 export async function onRequestGet({ env }) {
   const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM usuarios WHERE super = 1").first();
   const sso = (env.OIDC_ISSUER && env.OIDC_CLIENT_ID && env.OIDC_CLIENT_SECRET) ? (env.OIDC_NOMBRE || "Entrar con la cuenta de la empresa") : (env.MS_CLIENT_ID && env.MS_CLIENT_SECRET) ? "Entrar con Microsoft" : null;
-  const ad = !!(env.AD_URL && env.AD_SECRETO);
+  const ad = !!((env.AD || env.AD_URL) && env.AD_SECRETO);
   return json({ ok: true, necesita: c.n === 0, fotos_r2: !!env.FOTOS, microsoft: sso === "Entrar con Microsoft", sso, ad, ad_nombre: ad ? (env.AD_NOMBRE || "Entrar con mi usuario de Windows (dominio)") : null }); // fotos_r2: bucket R2; sso: texto del botón de inicio con la cuenta de la empresa (null si no está configurado)
 }
 export async function onRequestPost({ request, env }) {

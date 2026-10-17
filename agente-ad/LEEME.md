@@ -26,7 +26,9 @@ powershell -ExecutionPolicy Bypass -File instalar.ps1
 
    Queda registrado como tarea programada que arranca con Windows y se reinicia sola si se cae. Para probar: abrir http://localhost:8787/salud en esa máquina.
 
-4. Publicarlo con un túnel de Cloudflare: panel de Cloudflare → **Zero Trust** → **Networks** → **Tunnels** → **Create a tunnel** (Cloudflared) → elegir Windows e instalar con el comando que muestra → en **Public hostnames**: subdominio `ad`, dominio `proesabol.com`, servicio **HTTP** `localhost:8787`.
+4. **Conectarlo sin dominio (recomendado)**: con el túnel de Cloudflare instalado en la PC (Zero Trust → Networks → Tunnels → Create a tunnel → Windows), no hace falta publicar ninguna dirección. Se crea un *VPC Service* que apunta a `127.0.0.1:8787` por ese túnel, se despliega el Worker de la carpeta `puente/` con ese id, y en el proyecto Pages se agregan el *service binding* `AD` → Worker `agente-ad` y el secreto `AD_SECRETO`. Nadie desde internet puede llamar al agente: solo FlotaControl, por dentro de Cloudflare.
+
+   **Alternativa con dirección pública** (requiere un dominio en Cloudflare). Publicarlo con un túnel de Cloudflare: panel de Cloudflare → **Zero Trust** → **Networks** → **Tunnels** → **Create a tunnel** (Cloudflared) → elegir Windows e instalar con el comando que muestra → en **Public hostnames**: subdominio `ad`, dominio `proesabol.com`, servicio **HTTP** `localhost:8787`.
 5. En Cloudflare Pages, proyecto de FlotaControl → **Settings → Variables and Secrets**, agregar como secretos:
 
 | Variable | Valor |

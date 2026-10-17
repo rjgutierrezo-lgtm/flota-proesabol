@@ -17,9 +17,11 @@ export async function onRequestPost({ request, env }) {
   const bq0 = await intentosBloqueado(env, claves); if (bq0) return err(bq0, 429);
   let u;
   if (b.dominio) { // usuario de Windows: lo valida el agente AD instalado en la red de la empresa (agente-ad/)
-    if (!env.AD_URL || !env.AD_SECRETO) return err("El ingreso con usuario de dominio no está configurado", 404);
+    if (!(env.AD || env.AD_URL) || !env.AD_SECRETO) return err("El ingreso con usuario de dominio no está configurado", 404);
     let r; try {
-      const resp = await fetch(String(env.AD_URL).replace(/\/$/, "") + "/validar", { method: "POST", headers: { "content-type": "application/json", "x-agente-secreto": env.AD_SECRETO }, body: JSON.stringify({ usuario, password: String(b.password || "") }), signal: AbortSignal.timeout(8000) });
+      // AD: service binding al Worker puente (túnel + Workers VPC, sin dominio). AD_URL: dirección pública del agente.
+      const init = { method: "POST", headers: { "content-type": "application/json", "x-agente-secreto": env.AD_SECRETO }, body: JSON.stringify({ usuario, password: String(b.password || "") }), signal: AbortSignal.timeout(8000) };
+      const resp = env.AD ? await env.AD.fetch("https://agente-ad/validar", init) : await fetch(String(env.AD_URL).replace(/\/$/, "") + "/validar", init);
       r = await resp.json();
     } catch (e) { return err("No se pudo contactar con el servidor de la empresa. Intenta de nuevo o usa tu contraseña de FlotaControl.", 502); }
     if (!r?.ok) { await intentoFallido(env, claves); return err(r?.error || "Usuario o contraseña incorrectos", 401); }
