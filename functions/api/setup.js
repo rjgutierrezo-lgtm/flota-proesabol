@@ -2,7 +2,8 @@
 import { json, err, txt, hashPass, randomHex, sameStr, validUser, ITER } from "../../lib/db.js";
 export async function onRequestGet({ env }) {
   const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM usuarios WHERE super = 1").first();
-  return json({ ok: true, necesita: c.n === 0, fotos_r2: !!env.FOTOS, microsoft: !!(env.MS_CLIENT_ID && env.MS_CLIENT_SECRET) }); // fotos_r2: bucket R2 conectado; microsoft: inicio de sesión con Entra ID configurado
+  const sso = (env.OIDC_ISSUER && env.OIDC_CLIENT_ID && env.OIDC_CLIENT_SECRET) ? (env.OIDC_NOMBRE || "Entrar con la cuenta de la empresa") : (env.MS_CLIENT_ID && env.MS_CLIENT_SECRET) ? "Entrar con Microsoft" : null;
+  return json({ ok: true, necesita: c.n === 0, fotos_r2: !!env.FOTOS, microsoft: sso === "Entrar con Microsoft", sso }); // fotos_r2: bucket R2; sso: texto del botón de inicio con la cuenta de la empresa (null si no está configurado)
 }
 export async function onRequestPost({ request, env }) {
   const b = await request.json().catch(() => ({}));

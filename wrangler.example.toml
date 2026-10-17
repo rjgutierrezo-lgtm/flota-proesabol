@@ -27,3 +27,7 @@ SETUP_KEY = "cambia-esta-clave"
 # MS_CLIENT_ID = "..."                      # Entrar con Microsoft (Entra ID): id de aplicación
 # MS_CLIENT_SECRET = "..."                  # secreto de cliente (como secreto en Cloudflare)
 # MS_TENANT = "organizations"               # id del directorio de la empresa, u "organizations"
+# OIDC_ISSUER = "https://id.empresa.com/realms/empresa"   # Active Directory local vía Keycloak (o cualquier OpenID Connect)
+# OIDC_CLIENT_ID = "flotacontrol"
+# OIDC_CLIENT_SECRET = "..."
+# OIDC_NOMBRE = "Entrar con la cuenta de Proesabol"

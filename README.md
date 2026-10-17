@@ -39,11 +39,14 @@ Para el límite de intentos de login y el bloqueo por IP la app usa D1. Si quier
 | `MAIL_ADMIN` | Correo del dueño de la plataforma: recibe un aviso cada vez que una empresa se registra desde la landing. |
 | `REGISTRO_ABIERTO` | `0` cierra el registro de empresas desde la landing (por defecto está abierto, con 30 días de prueba). |
 
-### Inicio de sesión con Microsoft (Entra ID / Microsoft 365)
+### Inicio de sesión con la cuenta de la empresa (Active Directory, Microsoft 365)
 
-Con las variables `MS_CLIENT_ID`, `MS_CLIENT_SECRET` y `MS_TENANT` (id del directorio de la empresa, u `organizations` para aceptar cualquier cuenta de trabajo) aparece el botón **Entrar con Microsoft** en la pantalla de ingreso. Registro de la aplicación en el portal de Microsoft Entra: tipo *Web*, URI de redirección `https://TU-DOMINIO/api/ms/callback`, permisos `openid`, `profile`, `email`, y un secreto de cliente.
+La app acepta cualquier proveedor OpenID Connect. Dos configuraciones típicas:
 
-Cada usuario de FlotaControl se vincula por su correo: el administrador lo escribe en **Usuarios → Correo de la empresa**; la primera vez que esa persona entra con Microsoft, su cuenta queda enlazada. Quien no tenga correo cargado no puede entrar por esa vía. Las contraseñas propias siguen funcionando.
+- **Microsoft 365 / Entra ID**: variables `MS_CLIENT_ID`, `MS_CLIENT_SECRET` y `MS_TENANT` (id del directorio, u `organizations`). Registro en el portal de Entra: tipo *Web*, URI de redirección `https://TU-DOMINIO/api/ms/callback`, permisos `openid profile email`, secreto de cliente. Botón "Entrar con Microsoft".
+- **Active Directory local** (Windows Server, sin Microsoft 365): se instala Keycloak en la red de la empresa con federación LDAP al AD, se publica con un túnel de Cloudflare y se configuran `OIDC_ISSUER` (por ejemplo `https://id.empresa.com/realms/empresa`), `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` y opcionalmente `OIDC_NOMBRE` (texto del botón). Guía en `docs/active-directory.md`.
+
+Vinculación de cada usuario, en este orden: identidad ya enlazada; correo igual al de **Usuarios → Correo de la empresa**; o nombre de usuario de FlotaControl igual al nombre de cuenta del dominio. Quien no coincida con nada no puede entrar por esa vía. Las contraseñas propias siguen funcionando.
 
 ### Recordatorio diario automático
 

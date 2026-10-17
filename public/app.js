@@ -39,7 +39,7 @@ function show(v){ ["vSetup","vLogin","vApp","vPub"].forEach(x=>$(x).classList.to
 async function boot(){
   const hm=location.hash.match(/^#ms=([0-9a-f]{64})$/); if(hm){ TOKEN=hm[1]; ls.set("ag-token",TOKEN); history.replaceState(null,"",location.pathname); } // vuelta del inicio de sesión con Microsoft
   const he=location.hash.match(/^#mserr=(.+)$/); if(he){ history.replaceState(null,"",location.pathname); setTimeout(()=>{ $("lgErr").textContent=decodeURIComponent(he[1]); },50); }
-  api("setup").then(s=>{ if(s.microsoft) $("msBox").classList.remove("hidden"); }).catch(()=>{});
+  api("setup").then(s=>{ if(s.sso){ $("msBox").classList.remove("hidden"); if(!s.microsoft){ $("msBtn").innerHTML="🏢 "+esc(s.sso); $("msBox").querySelector("p").textContent="o con tu usuario de la red"; } } }).catch(()=>{});
   if(TOKEN){ try{ const u=(await api("login")).usuario; ls.set("ag-user",JSON.stringify(u)); setUser(u); return startApp(); }
     catch(e){ const c=ls.get("ag-user"); if(e.offline&&c){ OFFLINE=true; setUser(JSON.parse(c)); return startApp(); } } }
   const hv=location.hash.match(/^#v=([a-f0-9]+)/i); if(hv) return fichaPublica(hv[1]); // QR escaneado sin sesión: ficha pública del vehículo
@@ -225,7 +225,7 @@ function userForm(u,P){ const perms=new Set(u?u.permisos:PRESETS.Conductor), suc
   dialog(`<h3>${u?"Editar usuario":"Nuevo usuario"}</h3><div class="row"><div class="field"><label>Nombre</label><input id="un" value="${esc(u?.nombre||"")}"></div>
     <div class="field"><label>Usuario (único en toda la plataforma)</label><input id="uu" value="${esc(u?.usuario||"")}" ${u?"disabled":""} autocapitalize="none" placeholder="ej: ana.${esc(EMP.slug)}"></div></div>
     <div class="row"><div class="field"><label>${u?"Nueva contraseña (vacía = no cambia)":"Contraseña (mínimo 8)"}</label><input id="up" type="password" autocomplete="new-password"></div>
-      <div class="field"><label>Correo de la empresa (Entrar con Microsoft)${u?.ms_vinculado?' <span class="chip ok">vinculado</span>':""}</label><input id="ue" type="email" value="${esc(u?.email||"")}" placeholder="nombre@empresa.com"></div></div>
+      <div class="field"><label>Correo de la empresa (inicio con la cuenta de la red)${u?.ms_vinculado?' <span class="chip ok">vinculado</span>':""}</label><input id="ue" type="email" value="${esc(u?.email||"")}" placeholder="nombre@empresa.com"></div></div>
     <div class="row"><div class="field"><label>Ficha de conductor</label><select id="uc"><option value="">Sin ficha de conductor</option><option value="nuevo">➕ Crear ficha con este nombre</option>${COND.filter(c=>c.activo||c.id===u?.conductor_id).map(c=>`<option value="${c.id}" ${c.id===u?.conductor_id?"selected":""}>${esc(c.nombre)}</option>`).join("")}</select></div>
       <div class="field"><label>Vehículo predeterminado</label><select id="uv"><option value="">Ninguno (elige al registrar)</option>${VEH.filter(v=>v.estado!=="baja"||v.id===u?.vehiculo_id).map(v=>`<option value="${v.id}" ${v.id===u?.vehiculo_id?"selected":""}>${esc(v.placa)} · ${esc(v.marca)} ${esc(v.modelo)}${v.conductor?" · "+esc(v.conductor):""}</option>`).join("")}</select></div></div>
     <p class="muted" style="margin-top:-6px">Con la ficha, cada registro guarda que este usuario manejaba. Con el vehículo, Registrar se abre con ese vehículo elegido.</p>
