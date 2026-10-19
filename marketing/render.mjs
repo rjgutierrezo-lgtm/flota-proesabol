@@ -1,5 +1,5 @@
-// Graba marketing/spot.html a video con Chrome sin ventana (sin ffmpeg ni librerías).
-// Uso: node render.mjs spot.html salida.mp4            → video completo
+// Graba public/landing/spot.html (el comercial que se ve en la landing) a video con Chrome sin ventana (sin ffmpeg ni librerías).
+// Uso: node render.mjs ../public/landing/spot.html salida.mp4            → video completo
 //      node render.mjs spot.html cuadros --t 1,5,12    → capturas PNG de esos segundos (para revisar)
 import { spawn } from "node:child_process";
 import { writeFileSync, mkdtempSync, rmSync } from "node:fs";

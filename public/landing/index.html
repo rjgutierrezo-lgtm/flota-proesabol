@@ -94,6 +94,9 @@ details{background:var(--card);border:1px solid var(--line);border-radius:12px;p
 .cta{background:linear-gradient(160deg,#0B2A6F,#04122F);color:#fff;text-align:center}.cta p{color:#C9D6FF;font-size:1.15rem;max-width:620px;margin:0 auto 26px}.cta .ctas{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 footer{background:#04122F;color:#9FB2E6;padding:28px 0;font-size:.9rem}footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}footer a{color:#C9D6FF}
 .fab{position:fixed;right:16px;bottom:16px;z-index:20;box-shadow:0 10px 30px rgba(0,0,0,.3);border-radius:99px}
+/* video */
+.vid{box-sizing:content-box;width:min(380px,78vw);aspect-ratio:9/16;margin:0 auto;border-radius:40px;overflow:hidden;border:10px solid #1B2540;background:#061A45;box-shadow:0 40px 90px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.06)}
+.vid iframe{width:100%;height:100%;border:0;display:block}
 /* reveal */
 .rv{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s ease}.rv.on{opacity:1;transform:none}
 @media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}.ln,.hb .r{animation:none;stroke-dashoffset:0;width:var(--w)}.shot{transform:none}html{scroll-behavior:auto}.kicker i{animation:none}}
@@ -102,7 +105,7 @@ footer{background:#04122F;color:#9FB2E6;padding:28px 0;font-size:.9rem}footer .w
 <body>
 <header class="top"><div class="wrap">
   <a class="brand" href="#"><img src="/icon.svg" alt="">Flota<span>Control</span></a>
-  <nav><a href="#funciones">Funciones</a><a href="#calc">Cuánto ahorro</a><a href="#planes">Planes</a><a href="#demo">Demo</a><a href="#faq">Preguntas</a></nav>
+  <nav><a href="#video">Video</a><a href="#funciones">Funciones</a><a href="#calc">Cuánto ahorro</a><a href="#planes">Planes</a><a href="#demo">Demo</a><a href="#faq">Preguntas</a></nav>
   <a class="btn sec" href="/">Ingresar</a><a class="btn pri" href="#registro" style="margin-left:4px">Empezar gratis</a>
 </div></header>
 
@@ -141,6 +144,13 @@ footer{background:#04122F;color:#9FB2E6;padding:28px 0;font-size:.9rem}footer .w
   <div class="num rv"><b data-n="20">0</b><span>segundos tarda un conductor en registrar una carga: escanea el QR, escribe km y litros, foto, listo</span></div>
   <div class="num rv"><b data-n="7">0</b><span>días antes te avisa de cada SOAT, inspección, seguro o licencia que vence</span></div>
 </div><p class="center" style="color:#9FB2E6;font-size:.8rem;margin:14px 0 0">* Reparación referencial de Bs 12.000 frente al plan Flota de Bs 249 al mes.</p></div>
+
+<section id="video" class="center" style="background:linear-gradient(180deg,#04122F,#061A45);color:#fff"><div class="wrap">
+  <h2 class="rv">FlotaControl en 30 segundos</h2>
+  <p class="sub rv" style="color:#C9D6FF">Del QR de la factura a la alerta en el celular del jefe de flota. Así se ve un día con la flota bajo control.</p>
+  <div class="vid rv"><iframe src="spot.html" title="Comercial animado de FlotaControl" loading="lazy" scrolling="no"></iframe></div>
+  <div class="ctas rv" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:30px"><a class="btn pri xl" href="#registro">Empezar gratis 30 días</a><a class="btn wa xl" data-wa href="#contacto">💬 Escribir por WhatsApp</a></div>
+</div></section>
 
 <section class="pain"><div class="wrap">
   <h2 class="center rv">Tres cosas que pasan cuando el control está en un cuaderno</h2>

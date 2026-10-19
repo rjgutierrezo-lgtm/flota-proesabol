@@ -230,7 +230,9 @@ window.renderVideo = async () => {
   return { mime, b64: btoa(s), cuadros: N, lentos: lento };
 };
 // Reproducción normal en bucle
-if (!location.hash.includes("render")) window.listo.then(() => { const t0 = performance.now(); const loop = now => { frame(((now - t0) / 1000) % DUR); requestAnimationFrame(loop); }; requestAnimationFrame(loop); });
+// Quien prefiere menos movimiento ve el cierre fijo, sin animación
+if (!location.hash.includes("render") && matchMedia("(prefers-reduced-motion: reduce)").matches) window.listo.then(() => frame(29.6));
+else if (!location.hash.includes("render")) window.listo.then(() => { const t0 = performance.now(); const loop = now => { frame(((now - t0) / 1000) % DUR); requestAnimationFrame(loop); }; requestAnimationFrame(loop); });
 </script>
 </body>
 </html>
