@@ -2,3 +2,5 @@
 wrangler.toml
 node_modules/
 agente-ad/config.json
+marketing/*.mp4
+marketing/cuadros/

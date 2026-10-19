@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlotaControl Spot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@700&display=swap" rel="stylesheet">
+<style>html,body{margin:0;height:100%;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden}canvas{height:100vh;width:auto;max-width:100vw;object-fit:contain}</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920" aria-label="Comercial animado de FlotaControl"></canvas>
+<script>
+// Comercial vertical de FlotaControl (30 s, 1080x1920). Abierto normal se reproduce en bucle; con #render, render.mjs lo graba a MP4.
+const W = 1080, H = 1920, FPS = 30, DUR = 30;
+const c = document.getElementById("c"), x = c.getContext("2d");
+const C = { navy: "#061A45", ink: "#04122F", blue: "#2563EB", blue2: "#3987E5", sky: "#A9C0FF", orange: "#FF8A00", orange2: "#FFB357", white: "#FFFFFF", muted: "#A9B8DD", red: "#F2887D", green: "#3DDC97", wa: "#25D366", card: "#0F1522", card2: "#182033", line: "#243049" };
+const F = '"IBM Plex Sans", "Segoe UI", system-ui, sans-serif', FC = '"IBM Plex Sans Condensed", "IBM Plex Sans", "Segoe UI", sans-serif';
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
+const eo = t => 1 - Math.pow(1 - clamp(t), 3), eio = t => { t = clamp(t); return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+const back = t => { t = clamp(t); const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const sa = (t, a, b, fi = .3, fo = .3) => (t < a || t > b) ? 0 : Math.min(clamp((t - a) / fi), clamp((b - t) / fo));
+const bs = n => "Bs " + Number(n).toLocaleString("es-BO", { maximumFractionDigits: 0 });
+function rr(X, Y, w, h, r) { x.beginPath(); x.roundRect(X, Y, w, h, r); }
+function txt(s, X, Y, o = {}) {
+  const { size = 60, weight = 700, color = C.white, align = "center", font = F, alpha = 1, base = "middle" } = o;
+  x.save(); x.globalAlpha *= alpha; x.font = `${weight} ${size}px ${font}`; x.fillStyle = color; x.textAlign = align; x.textBaseline = base; x.fillText(s, X, Y); x.restore();
+}
+function glow(X, Y, R, col) { const g = x.createRadialGradient(X, Y, 0, X, Y, R); g.addColorStop(0, col); g.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = g; x.fillRect(X - R, Y - R, 2 * R, 2 * R); }
+function bg(t) {
+  const g = x.createLinearGradient(0, 0, W * .3, H); g.addColorStop(0, "#0B2A6F"); g.addColorStop(.55, "#061A45"); g.addColorStop(1, "#030C22"); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  glow(W * .86 + Math.sin(t * .6) * 70, 330 + Math.cos(t * .5) * 90, 760, "rgba(37,99,235,0.42)");
+  glow(W * .08 + Math.cos(t * .45) * 70, H - 260 + Math.sin(t * .7) * 50, 700, "rgba(255,138,0,0.26)");
+  x.save(); x.strokeStyle = "rgba(255,255,255,0.045)"; x.lineWidth = 2; const o = (t * 24) % 90;
+  for (let gx = -90 + o; gx < W; gx += 90) { x.beginPath(); x.moveTo(gx, 0); x.lineTo(gx, H); x.stroke(); }
+  for (let gy = -90 + o; gy < H; gy += 90) { x.beginPath(); x.moveTo(0, gy); x.lineTo(W, gy); x.stroke(); }
+  x.restore();
+}
+function logo(cx, cy, s, needle = 1) {
+  x.save(); x.translate(cx, cy);
+  const g = x.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2); g.addColorStop(0, "#2D63E8"); g.addColorStop(1, "#0B2A6F");
+  rr(-s / 2, -s / 2, s, s, s * .23); x.fillStyle = g; x.fill();
+  const R = s * .3, oy = s * .06; x.lineCap = "round"; x.lineWidth = s * .075;
+  x.strokeStyle = "#fff"; x.beginPath(); x.arc(0, oy, R, Math.PI * .8, Math.PI * 1.88); x.stroke();
+  x.strokeStyle = C.orange; x.beginPath(); x.arc(0, oy, R, Math.PI * 1.96, Math.PI * 2.2); x.stroke();
+  x.lineWidth = s * .03; x.strokeStyle = "rgba(255,255,255,.55)";
+  for (const a of [1.05, 1.3, 1.55]) { x.beginPath(); x.moveTo(Math.cos(Math.PI * a) * R * .68, oy + Math.sin(Math.PI * a) * R * .68); x.lineTo(Math.cos(Math.PI * a) * R * .55, oy + Math.sin(Math.PI * a) * R * .55); x.stroke(); }
+  const ang = lerp(Math.PI * .85, Math.PI * 1.72, needle); x.strokeStyle = "#fff"; x.lineWidth = s * .055;
+  x.beginPath(); x.moveTo(0, oy); x.lineTo(Math.cos(ang) * R * .72, oy + Math.sin(ang) * R * .72); x.stroke();
+  x.beginPath(); x.arc(0, oy, s * .065, 0, 7); x.fillStyle = "#fff"; x.fill(); x.beginPath(); x.arc(0, oy, s * .028, 0, 7); x.fillStyle = "#2D63E8"; x.fill();
+  x.restore();
+}
+function caption(t, a, main, sub, subColor = C.orange) {
+  const p = eo(prog(t, a, a + .45)), q = eo(prog(t, a + .2, a + .65));
+  txt(main, W / 2, 205 + (1 - p) * 50, { size: 84, alpha: p });
+  if (sub) txt(sub, W / 2, 300 + (1 - q) * 40, { size: 56, weight: 600, color: subColor, alpha: q });
+}
+function phone(X, Y, w, h, draw) {
+  x.save(); x.shadowColor = "rgba(0,0,0,.55)"; x.shadowBlur = 70; x.shadowOffsetY = 30;
+  rr(X - 16, Y - 16, w + 32, h + 32, 74); x.fillStyle = "#1B2540"; x.fill(); x.restore();
+  x.save(); rr(X, Y, w, h, 60); x.fillStyle = C.card; x.fill(); x.clip(); draw(X, Y, w, h); x.restore();
+  rr(X + w / 2 - 85, Y + 18, 170, 36, 18); x.fillStyle = "#1B2540"; x.fill();
+}
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const QR = Array.from({ length: 625 }, () => rnd() > .5);
+
+// 1) Gancho: el costo de no controlar
+function s1(t) {
+  const A = sa(t, 0, 3.6, .25, .35); if (!A) return; x.save(); x.globalAlpha = A;
+  const p1 = eo(prog(t, .1, .6)); txt("¿Cuánto te cuesta", W / 2, 700 + (1 - p1) * 60, { size: 96, alpha: p1 });
+  const p2 = prog(t, .55, .95); if (p2 > 0) { x.save(); x.translate(W / 2, 850); const k = lerp(1.9, 1, back(p2)); x.scale(k, k); txt("un motor fundido?", 0, 0, { size: 112, color: C.orange, alpha: clamp(p2 * 3) }); x.restore(); }
+  if (t > 1.25) { const p3 = prog(t, 1.25, 2.55), sh = t > 2.55 && t < 2.95 ? Math.sin(t * 130) * 14 : 0;
+    txt(bs(Math.round(12000 * eo(p3))), W / 2 + sh, 1110, { size: 210, font: FC, color: C.red });
+    txt("en reparación… más los días sin trabajar", W / 2, 1265, { size: 46, weight: 500, color: C.muted, alpha: clamp((t - 2.45) * 3) }); }
+  x.restore();
+}
+// 2) Problemas que todos reconocen
+function s2(t) {
+  const A = sa(t, 3.6, 7.2, .2, .3); if (!A) return; x.save(); x.globalAlpha = A;
+  txt("Pasa todos los días:", W / 2, 560, { size: 62, weight: 600, color: C.muted, alpha: eo(prog(t, 3.6, 4)) });
+  [["Cambio de aceite olvidado", 3.9], ["SOAT vencido en ruta", 4.55], ["Combustible que desaparece", 5.2]].forEach(([s, t0], i) => {
+    const p = prog(t, t0, t0 + .35); if (p <= 0) return; const k = lerp(1.45, 1, eo(p)), y = 770 + i * 195;
+    x.save(); x.translate(W / 2, y); x.scale(k, k); x.globalAlpha *= clamp(p * 2.5);
+    rr(-470, -78, 940, 156, 30); x.fillStyle = "rgba(255,255,255,0.07)"; x.fill(); x.strokeStyle = "rgba(242,136,125,0.55)"; x.lineWidth = 3; x.stroke();
+    x.beginPath(); x.arc(-380, 0, 44, 0, 7); x.fillStyle = C.red; x.fill(); txt("✕", -380, 3, { size: 50, color: C.ink });
+    txt(s, -310, 2, { size: 52, align: "left" }); x.restore();
+  });
+  const p4 = prog(t, 6.0, 6.4); if (p4 > 0) { x.save(); x.translate(W / 2, 1440); const k = lerp(2.1, 1, back(p4)); x.scale(k, k); txt("¿Te suena?", 0, 0, { size: 128, color: C.orange, alpha: clamp(p4 * 2) }); x.restore(); }
+  x.restore();
+}
+// 3) Revelación de la marca
+function s3(t) {
+  const A = sa(t, 7.2, 10.2, .2, .35); if (!A) return; x.save(); x.globalAlpha = A;
+  const r = prog(t, 7.85, 8.9); if (r > 0 && r < 1) { x.beginPath(); x.arc(W / 2, 800, 200 + r * 460, 0, 7); x.strokeStyle = `rgba(255,179,87,${.65 * (1 - r)})`; x.lineWidth = 10; x.stroke(); }
+  const p = prog(t, 7.3, 8.0); if (p > 0) { x.save(); x.translate(W / 2, 800); const k = back(p); x.scale(k, k); logo(0, 0, 380, eio(prog(t, 7.6, 8.7))); x.restore(); }
+  const p2 = eo(prog(t, 8.1, 8.6)); x.save(); x.globalAlpha *= p2; x.font = `700 156px ${F}`;
+  const w1 = x.measureText("Flota").width, w2 = x.measureText("Control").width, sx = W / 2 - (w1 + w2) / 2, y = 1180 + (1 - p2) * 40;
+  txt("Flota", sx, y, { size: 156, align: "left" }); txt("Control", sx + w1, y, { size: 156, align: "left", color: C.sky }); x.restore();
+  txt("Tu flota bajo control. Desde el celular.", W / 2, 1330, { size: 52, weight: 500, color: C.muted, alpha: eo(prog(t, 8.6, 9.1)) });
+  x.restore();
+}
+// 4) Escanear la factura y registrar en 20 segundos
+function s4(t) {
+  const A = sa(t, 10.2, 15.8, .25, .35); if (!A) return; x.save(); x.globalAlpha = A;
+  caption(t, 10.2, "Escanea. Registra. Listo.", "en 20 segundos");
+  const ph = eo(prog(t, 10.2, 10.8));
+  phone(220, 420 + (1 - ph) * 200, 640, 1340, (X, Y, w, h) => {
+    rr(X, Y, w, 170, 0); x.fillStyle = C.card2; x.fill();
+    txt("Transportes Demo", X + 40, Y + 105, { size: 30, align: "left", color: C.muted, weight: 600 }); txt("Registrar", X + 40, Y + 145, { size: 40, align: "left" });
+    const scanA = sa(t, 10.4, 12.1, .2, .25);
+    if (scanA) { x.save(); x.globalAlpha *= scanA;
+      txt("🧾 QR de la factura", X + w / 2, Y + 240, { size: 34, weight: 600, color: C.muted });
+      rr(X + 70, Y + 290, w - 140, w - 140, 28); x.fillStyle = "#000"; x.fill();
+      const q = 22, n = 25, qs = n * q, qx = X + (w - qs) / 2, qy = Y + 290 + (w - 140 - qs) / 2; x.fillStyle = "#fff"; rr(qx - 20, qy - 20, qs + 40, qs + 40, 10); x.fill(); x.fillStyle = "#0F1522";
+      for (let i = 0; i < n * n; i++) { const r0 = Math.floor(i / n), c0 = i % n, fin = (r0 < 7 && c0 < 7) || (r0 < 7 && c0 > 17) || (r0 > 17 && c0 < 7);
+        const on = fin ? (r0 % 6 === 0 || c0 % 6 === 0 || (r0 % 18 > 1 && r0 % 18 < 5 && c0 % 18 > 1 && c0 % 18 < 5) || r0 === 24 || c0 === 24 || (r0 > 17 && (r0 - 18) % 6 === 0) || (c0 > 17 && (c0 - 18) % 6 === 0)) : QR[i];
+        if (on) x.fillRect(qx + c0 * q, qy + r0 * q, q, q); }
+      const ly = qy - 10 + (qs + 20) * (0.5 + 0.5 * Math.sin(t * 5)); x.fillStyle = "#ff3b30"; x.fillRect(qx - 30, ly, qs + 60, 5);
+      const ok = prog(t, 11.55, 11.8); if (ok > 0) { x.globalAlpha *= ok; rr(X + 70, Y + 290, w - 140, w - 140, 28); x.fillStyle = "rgba(27,127,76,.88)"; x.fill(); txt("✓", X + w / 2, Y + 530, { size: 170, color: "#fff" }); txt("Factura leída del SIN", X + w / 2, Y + 690, { size: 38, color: "#fff" }); }
+      x.restore(); }
+    const fA = clamp((t - 11.95) / .25); if (fA > 0) { x.save(); x.globalAlpha *= fA;
+      rr(X + 40, Y + 205, w - 80, 70, 35); x.fillStyle = "rgba(61,220,151,.16)"; x.fill(); txt("🧾 Factura SIAT · VÁLIDA", X + w / 2, Y + 241, { size: 32, color: C.green });
+      [["Vehículo", "2847KLM · Toyota Hilux"], ["Litros", "50,00"], ["Monto (Bs)", "186,00"], ["Estación", "YPFB Av. Banzer"], ["N° de factura", "10482"]].forEach(([l, v], i) => {
+        const y = Y + 310 + i * 150, tp = prog(t, 12.1 + i * .38, 12.45 + i * .38);
+        txt(l, X + 50, y, { size: 28, align: "left", color: C.muted, weight: 600 });
+        rr(X + 40, y + 22, w - 80, 86, 18); x.fillStyle = "#121A2C"; x.fill(); x.strokeStyle = tp > 0 && tp < 1 ? C.orange : C.line; x.lineWidth = 3; x.stroke();
+        txt(v.slice(0, Math.round(v.length * tp)), X + 66, y + 66, { size: 38, align: "left", weight: 600 }); });
+      const press = t > 14.25 && t < 14.45 ? .94 : 1; x.save(); x.translate(X + w / 2, Y + h - 125); x.scale(press, press);
+      rr(-(w - 80) / 2, -50, w - 80, 100, 22); x.fillStyle = C.blue; x.fill(); txt("Guardar", 0, 2, { size: 42 }); x.restore();
+      x.restore(); }
+    const ts = sa(t, 14.45, 15.8, .2, .2); if (ts) { x.save(); x.globalAlpha *= ts; const y = Y + h - 290 + (1 - eo(prog(t, 14.45, 14.75))) * 60;
+      rr(X + 30, y, w - 60, 110, 55); x.fillStyle = "#E7ECF4"; x.fill(); txt("✓ Guardado · 9,8 km/l", X + w / 2, y + 57, { size: 40, color: "#1B7F4C" }); x.restore(); }
+  });
+  x.restore();
+}
+// 5) Notificaciones al instante
+function s5(t) {
+  const A = sa(t, 15.8, 19.8, .25, .35); if (!A) return; x.save(); x.globalAlpha = A;
+  caption(t, 15.8, "Alertas al instante", "aunque la app esté cerrada");
+  phone(220, 420, 640, 1340, (X, Y, w, h) => {
+    const g = x.createLinearGradient(X, Y, X + w, Y + h); g.addColorStop(0, "#1E3A8A"); g.addColorStop(1, "#0B1430"); x.fillStyle = g; x.fillRect(X, Y, w, h);
+    txt("08:42", X + w / 2, Y + 300, { size: 170, weight: 600 }); txt("sábado 18 de octubre", X + w / 2, Y + 420, { size: 36, weight: 500, color: C.muted });
+    const nots = [[16.2, "⚠️ 4512GHJ: rendimiento bajo", "7,2 km/l (esperado 8,5) · registró Carlos"], [17.15, "📄 3159PRT: SOAT por vencer", "Vence en 7 días · Parqueo Central"], [18.1, "🔧 1986BNM: cambio de aceite", "Vencido hace 1.240 km"]];
+    nots.forEach(([t0, ti, bo], i) => { const p = prog(t, t0, t0 + .45); if (p <= 0) return; const y = lerp(Y - 240, Y + 520 + i * 245, back(p));
+      x.save(); x.globalAlpha *= clamp(p * 3); x.shadowColor = "rgba(0,0,0,.35)"; x.shadowBlur = 30; rr(X + 28, y, w - 56, 215, 34); x.fillStyle = "rgba(245,247,252,.96)"; x.fill(); x.restore();
+      x.save(); x.globalAlpha *= clamp(p * 3); logo(X + 88, y + 62, 64, 1); txt("FlotaControl · ahora", X + 134, y + 62, { size: 26, align: "left", color: "#5B6577", weight: 600 });
+      txt(ti, X + 56, y + 125, { size: 33, align: "left", color: "#14213D" }); txt(bo, X + 56, y + 172, { size: 27, align: "left", color: "#5B6577", weight: 500 }); x.restore(); });
+  });
+  x.restore();
+}
+// 6) Dashboard con números que se mueven
+function s6(t) {
+  const A = sa(t, 19.8, 24.8, .25, .35); if (!A) return; x.save(); x.globalAlpha = A;
+  caption(t, 19.8, "Costos claros.", "Decisiones rápidas.");
+  const p0 = eo(prog(t, 19.9, 20.4)), X = 60, Y = 420 + (1 - p0) * 120, w = 960, h = 1380;
+  x.save(); x.shadowColor = "rgba(0,0,0,.5)"; x.shadowBlur = 60; rr(X, Y, w, h, 40); x.fillStyle = C.card; x.fill(); x.restore(); rr(X, Y, w, h, 40); x.strokeStyle = C.line; x.lineWidth = 2; x.stroke();
+  txt("Dashboard de la flota", X + 50, Y + 80, { size: 40, align: "left" }); txt("Este mes", X + w - 50, Y + 80, { size: 30, align: "right", color: C.muted, weight: 600 });
+  const cnt = eo(prog(t, 20.3, 21.6)), tw = (w - 100 - 40) / 3;
+  [[bs(48170 * cnt), "Gasto del mes", true, C.white], ["Bs " + (1.46 * cnt).toFixed(2).replace(".", ","), "Costo por km", false, C.white], [String(Math.round(2 * cnt)), "Vencidos", false, C.red]].forEach(([v, l, hero, col], i) => {
+    const tx = X + 50 + i * (tw + 20), ty = Y + 140;
+    if (hero) { const g = x.createLinearGradient(tx, ty, tx + tw, ty + 200); g.addColorStop(0, "#2563EB"); g.addColorStop(1, "#0B2A6F"); x.fillStyle = g; } else x.fillStyle = C.card2;
+    rr(tx, ty, tw, 200, 24); x.fill(); txt(v, tx + 26, ty + 85, { size: 50, align: "left", font: FC, color: col }); txt(l, tx + 26, ty + 150, { size: 28, align: "left", color: hero ? "#C9D6FF" : C.muted, weight: 600 }); });
+  const cx0 = X + 50, cy0 = Y + 420, cw = w - 100, ch = 380; rr(cx0, cy0, cw, ch + 60, 24); x.fillStyle = C.card2; x.fill();
+  txt("Gasto por mes", cx0 + 28, cy0 + 50, { size: 30, align: "left", color: C.muted, weight: 600 });
+  const s1v = [38, 44, 41, 52, 47, 58, 55, 61, 57, 66, 63, 72], s2v = [12, 15, 11, 18, 14, 22, 16, 19, 24, 17, 21, 20];
+  const gx = i => cx0 + 50 + i * (cw - 100) / 11, gy = v => cy0 + ch + 10 - (v / 80) * (ch - 90);
+  x.strokeStyle = "rgba(255,255,255,.07)"; x.lineWidth = 2; for (const v of [20, 40, 60, 80]) { x.beginPath(); x.moveTo(cx0 + 30, gy(v)); x.lineTo(cx0 + cw - 30, gy(v)); x.stroke(); }
+  const dp = eio(prog(t, 20.6, 22.2));
+  x.save(); x.beginPath(); x.rect(cx0, cy0, (cw) * dp, ch + 60); x.clip();
+  for (const [serie, col] of [[s1v, C.blue2], [s2v, C.orange]]) { x.strokeStyle = col; x.lineWidth = 7; x.lineJoin = "round"; x.lineCap = "round"; x.beginPath(); serie.forEach((v, i) => i ? x.lineTo(gx(i), gy(v)) : x.moveTo(gx(i), gy(v))); x.stroke(); }
+  x.restore();
+  txt("● Combustible", cx0 + 28, cy0 + ch + 40, { size: 26, align: "left", color: C.blue2, weight: 600 }); txt("● Mantenimiento", cx0 + 260, cy0 + ch + 40, { size: 26, align: "left", color: C.orange, weight: 600 });
+  const by = Y + 930; txt("Por parqueo", X + 50, by, { size: 30, align: "left", color: C.muted, weight: 600 });
+  [["Santa Cruz", 1, 21340], ["La Paz", .62, 13230], ["Cochabamba", .41, 8750], ["Tarija", .22, 4850]].forEach(([n, f, v], i) => {
+    const y = by + 50 + i * 95, bp = eo(prog(t, 21.6 + i * .15, 22.5 + i * .15)), bw = (w - 500) * f * bp;
+    txt(n, X + 50, y + 30, { size: 32, align: "left", weight: 600 }); rr(X + 270, y + 6, Math.max(8, bw), 48, 12); x.fillStyle = i === 2 ? C.orange : C.blue2; x.fill();
+    txt(bs(v * bp), X + 290 + bw, y + 31, { size: 30, align: "left", color: C.white, alpha: bp }); });
+  x.restore();
+}
+// 7) Todo lo que incluye
+function s7(t) {
+  const A = sa(t, 24.8, 27.5, .2, .3); if (!A) return; x.save(); x.globalAlpha = A;
+  txt("Todo en una sola app", W / 2, 400 + (1 - eo(prog(t, 24.8, 25.2))) * 50, { size: 86, alpha: eo(prog(t, 24.8, 25.2)) });
+  const items = [["🔧", "Mantenimiento", "preventivo"], ["⛽", "Control de", "combustible"], ["📄", "Documentos", "al día"], ["🛞", "Llantas y", "baterías"], ["📦", "Repuestos", "con stock"], ["📶", "Funciona", "sin señal"], ["🔐", "Usuario de", "Windows"], ["📊", "Dashboard", "por parqueo"]];
+  items.forEach(([ic, a, b], i) => { const p = prog(t, 25.0 + i * .11, 25.4 + i * .11); if (p <= 0) return;
+    const col = i % 2, row = Math.floor(i / 2), cx = 282 + col * 516, cy = 640 + row * 265, k = back(p);
+    x.save(); x.translate(cx, cy); x.scale(k, k); x.globalAlpha *= clamp(p * 3);
+    rr(-240, -100, 480, 200, 34); x.fillStyle = "rgba(255,255,255,0.08)"; x.fill(); x.strokeStyle = i % 3 === 0 ? "rgba(255,138,0,.55)" : "rgba(169,192,255,.35)"; x.lineWidth = 3; x.stroke();
+    txt(ic, -160, 0, { size: 76, base: "middle" }); txt(a, -92, -28, { size: 39, align: "left" }); txt(b, -92, 30, { size: 39, align: "left", color: C.sky }); x.restore(); });
+  x.restore();
+}
+// 8) Llamado a la acción
+function s8(t) {
+  const A = sa(t, 27.5, 30.2, .2, .05); if (!A) return; x.save(); x.globalAlpha = A;
+  const pl = prog(t, 27.5, 28.0); if (pl > 0) { x.save(); x.translate(W / 2, 420); const k = back(pl); x.scale(k, k); logo(0, 0, 220, 1); x.restore(); }
+  const p1 = prog(t, 27.8, 28.2); if (p1 > 0) { x.save(); x.translate(W / 2, 760); const k = lerp(2.2, 1, back(p1)); x.scale(k, k); txt("30 DÍAS", 0, 0, { size: 230, font: FC, color: C.orange, alpha: clamp(p1 * 2) }); x.restore(); }
+  const p2 = prog(t, 28.05, 28.45); if (p2 > 0) { x.save(); x.translate(W / 2, 955); const k = lerp(1.8, 1, back(p2)); x.scale(k, k); txt("GRATIS", 0, 0, { size: 180, font: FC, alpha: clamp(p2 * 2) }); x.restore(); }
+  const p3 = eo(prog(t, 28.4, 28.8)); txt("Sin tarjeta · Sin instalación · Sin contrato", W / 2, 1090, { size: 44, weight: 500, color: C.muted, alpha: p3 });
+  const p4 = eo(prog(t, 28.6, 29.0)); x.save(); x.globalAlpha *= p4; rr(110, 1210, 860, 120, 60); x.strokeStyle = C.sky; x.lineWidth = 3; x.stroke(); txt("flota-8r3.pages.dev/landing", W / 2, 1272, { size: 46, weight: 600, color: C.sky }); x.restore();
+  const p5 = prog(t, 28.8, 29.2); if (p5 > 0) { const k = back(p5) * (1 + .035 * Math.sin(t * 9)); x.save(); x.translate(W / 2, 1450); x.scale(k, k); x.globalAlpha *= clamp(p5 * 3);
+    x.shadowColor = "rgba(37,211,102,.5)"; x.shadowBlur = 50; rr(-390, -75, 780, 150, 75); x.fillStyle = C.wa; x.fill(); x.shadowBlur = 0; txt("💬 +591 624 66662", 0, 4, { size: 58, color: "#06301A" }); x.restore(); }
+  txt("Escríbenos y te mostramos la app con tu flota", W / 2, 1600, { size: 40, weight: 500, color: C.muted, alpha: eo(prog(t, 29.1, 29.5)) });
+  x.restore();
+}
+// Barrido naranja entre escenas
+function wipes(t) {
+  for (const b of [3.6, 7.2, 10.2, 15.8, 19.8, 24.8, 27.5]) { const p = prog(t, b - .2, b + .2); if (p <= 0 || p >= 1) continue;
+    const off = lerp(-W * 1.6, W * 1.6, eio(p)); x.save(); x.translate(off, 0); x.beginPath(); x.moveTo(W * .2, 0); x.lineTo(W * .55, 0); x.lineTo(W * .35, H); x.lineTo(0, H); x.closePath();
+    const g = x.createLinearGradient(0, 0, W * .5, 0); g.addColorStop(0, "rgba(255,138,0,0)"); g.addColorStop(.5, "rgba(255,138,0,.9)"); g.addColorStop(1, "rgba(255,179,87,0)"); x.fillStyle = g; x.fill(); x.restore(); }
+}
+function frame(t) { x.setTransform(1, 0, 0, 1, 0, 0); x.globalAlpha = 1; bg(t); s1(t); s2(t); s3(t); s4(t); s5(t); s6(t); s7(t); s8(t); wipes(t); }
+window.frame = frame;
+
+async function fuentes() { await Promise.all(['700 60px "IBM Plex Sans"', '600 60px "IBM Plex Sans"', '500 60px "IBM Plex Sans"', '700 60px "IBM Plex Sans Condensed"'].map(f => document.fonts.load(f).catch(() => {}))); await document.fonts.ready; }
+window.listo = fuentes();
+// Grabación a video (la usa render.mjs): cuadro por cuadro a ritmo real, con MediaRecorder
+window.renderVideo = async () => {
+  await window.listo;
+  const tipos = ["video/mp4;codecs=avc1.640028", "video/mp4;codecs=avc1.4D0028", "video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm"];
+  const mime = tipos.find(m => MediaRecorder.isTypeSupported(m));
+  const st = c.captureStream(0), tr = st.getVideoTracks()[0], rec = new MediaRecorder(st, { mimeType: mime, videoBitsPerSecond: 4.2e6 }), parts = [];
+  rec.ondataavailable = e => e.data.size && parts.push(e.data); const fin = new Promise(r => rec.onstop = r);
+  rec.start(); const N = DUR * FPS, t0 = performance.now(); let lento = 0;
+  for (let i = 0; i < N; i++) { const a = performance.now(); frame(i / FPS); tr.requestFrame(); if (performance.now() - a > 1000 / FPS) lento++;
+    const espera = t0 + (i + 1) * 1000 / FPS - performance.now(); await new Promise(r => setTimeout(r, Math.max(0, espera))); }
+  frame(DUR - .001); tr.requestFrame(); await new Promise(r => setTimeout(r, 300)); rec.stop(); await fin;
+  const u8 = new Uint8Array(await new Blob(parts, { type: mime }).arrayBuffer()); let s = "";
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return { mime, b64: btoa(s), cuadros: N, lentos: lento };
+};
+// Reproducción normal en bucle
+if (!location.hash.includes("render")) window.listo.then(() => { const t0 = performance.now(); const loop = now => { frame(((now - t0) / 1000) % DUR); requestAnimationFrame(loop); }; requestAnimationFrame(loop); });
+</script>
+</body>
+</html>
