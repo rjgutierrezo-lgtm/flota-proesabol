@@ -94,6 +94,13 @@ details{background:var(--card);border:1px solid var(--line);border-radius:12px;p
 .cta{background:linear-gradient(160deg,#0B2A6F,#04122F);color:#fff;text-align:center}.cta p{color:#C9D6FF;font-size:1.15rem;max-width:620px;margin:0 auto 26px}.cta .ctas{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 footer{background:#04122F;color:#9FB2E6;padding:28px 0;font-size:.9rem}footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}footer a{color:#C9D6FF}
 .fab{position:fixed;right:16px;bottom:16px;z-index:20;box-shadow:0 10px 30px rgba(0,0,0,.3);border-radius:99px}
+@media (max-width:520px){.top .btn.sec{display:none}.top .btn{padding:8px 12px;font-size:.88rem}.brand{font-size:1.05rem}}
+/* video real */
+.cine{background:#04122F;color:#fff;padding-top:56px}
+.cinebox{position:relative;max-width:1000px;margin:0 auto;border-radius:24px;overflow:hidden;aspect-ratio:16/9;background:#061A45 url(flotacontrol-portada.jpg) center/cover;box-shadow:0 40px 90px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.08)}
+.cinebox video{width:100%;height:100%;object-fit:cover;display:block}
+.sonido{position:absolute;right:14px;bottom:14px;border:1px solid rgba(255,255,255,.4);background:rgba(4,18,47,.72);color:#fff;font:inherit;font-weight:600;font-size:.95rem;padding:10px 16px;border-radius:99px;cursor:pointer;backdrop-filter:blur(6px)}
+.sonido:hover{background:rgba(4,18,47,.9)}
 /* video */
 .vid{box-sizing:content-box;width:min(380px,78vw);aspect-ratio:9/16;margin:0 auto;border-radius:40px;overflow:hidden;border:10px solid #1B2540;background:#061A45;box-shadow:0 40px 90px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.06)}
 .vid iframe{width:100%;height:100%;border:0;display:block}
@@ -145,7 +152,15 @@ footer{background:#04122F;color:#9FB2E6;padding:28px 0;font-size:.9rem}footer .w
   <div class="num rv"><b data-n="7">0</b><span>días antes te avisa de cada SOAT, inspección, seguro o licencia que vence</span></div>
 </div><p class="center" style="color:#9FB2E6;font-size:.8rem;margin:14px 0 0">* Reparación referencial de Bs 12.000 frente al plan Flota de Bs 249 al mes.</p></div>
 
-<section id="video" class="center" style="background:linear-gradient(180deg,#04122F,#061A45);color:#fff"><div class="wrap">
+<section id="video" class="cine"><div class="wrap">
+  <h2 class="center rv">Así trabaja una flota con FlotaControl</h2>
+  <div class="cinebox rv">
+    <video id="cineVid" src="flotacontrol.mp4" poster="flotacontrol-portada.jpg" muted loop playsinline preload="metadata" aria-label="Video de FlotaControl: la flota, el chofer escaneando el QR del vehículo, el jefe de flota viendo el dashboard y el logo"></video>
+    <button class="sonido" id="cineSon" type="button" aria-label="Activar sonido">🔇 Activar sonido</button>
+  </div>
+</div></section>
+
+<section id="spot" class="center" style="background:linear-gradient(180deg,#04122F,#061A45);color:#fff"><div class="wrap">
   <h2 class="rv">FlotaControl en 30 segundos</h2>
   <p class="sub rv" style="color:#C9D6FF">Del QR de la factura a la alerta en el celular del jefe de flota. Así se ve un día con la flota bajo control.</p>
   <div class="vid rv"><iframe src="spot.html" title="Comercial animado de FlotaControl" loading="lazy" scrolling="no"></iframe></div>
@@ -291,6 +306,12 @@ document.querySelectorAll(".rv").forEach(el => io.observe(el));
 const cuenta = el => { const fin = +el.dataset.n, t0 = performance.now(); const f = t => { const p = Math.min(1, (t - t0) / 1200); el.textContent = Math.round(fin * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(f); }; requestAnimationFrame(f); };
 const io2 = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { cuenta(e.target); io2.unobserve(e.target); } }), { threshold: .5 });
 document.querySelectorAll("[data-n]").forEach(el => io2.observe(el));
+// Video: se reproduce silenciado solo cuando está a la vista; el botón activa o quita el sonido
+(() => { const v = document.getElementById("cineVid"), b = document.getElementById("cineSon"); if (!v) return;
+  const quieto = matchMedia("(prefers-reduced-motion: reduce)").matches; if (quieto) v.controls = true;
+  new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { if (!quieto) v.play().catch(() => {}); } else v.pause(); }), { threshold: .35 }).observe(v);
+  b.onclick = () => { v.muted = !v.muted; if (!v.muted) { v.currentTime = 0; v.play().catch(() => {}); } b.textContent = v.muted ? "🔇 Activar sonido" : "🔊 Quitar sonido"; b.setAttribute("aria-label", v.muted ? "Activar sonido" : "Quitar sonido"); };
+})();
 // Calculadora de ahorro
 const $ = id => document.getElementById(id), fmt = n => "Bs " + Math.round(n).toLocaleString("es-BO");
 function calc() {
