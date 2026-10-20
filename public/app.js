@@ -561,10 +561,11 @@ async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.est
   $("rfac").onclick=()=>scan({titulo:"Escanear el QR de la factura",onCode:c=>{ if(!/nit=|cuf=/i.test(c)) return "⚠️ Ese QR no es de una factura del SIN"; leerFactura(c); return "✓ Factura leída"; }});
   $("rsc").onclick=()=>scan({titulo:"Escanear QR del vehículo",onCode:c=>{ const m=String(c).match(/#v=([a-f0-9]+)/i)||[null,c]; const v=act.find(x=>x.codigo===String(m[1]).toLowerCase()); if(!v) return "⚠️ No es un vehículo de tu flota"; $("rv").value=v.id; form(); return "✓ "+v.placa; }});
   form();
-  const guardar=async confirmar=>{ $("re").textContent=""; if(!$("rv").value) return $("re").textContent="Elige el vehículo";
+  const guardar=async forzar=>{ // forzar: guardar aunque el km se salga de lo normal (ya confirmado por el usuario)
+    $("re").textContent=""; if(!$("rv").value) return $("re").textContent="Elige el vehículo";
     const g=id=>$(id)?$(id).value.replace(",","."):""; const pv=CB?CB.get():{proveedor:""}; if(pv.error) return $("re").textContent=pv.error;
     if(EMP.foto_obligatoria&&["combustible","mantenimiento"].includes(tipo)&&!f1) return $("re").textContent="Tu empresa exige la foto de la factura en este registro. Tómala o elige el archivo antes de guardar.";
-    const body={tipo,vehiculo_id:+$("rv").value,km:g("fk"),litros:g("fl"),monto:g("fm"),lleno:$("fll")?$("fll").checked:true,proveedor:pv.proveedor,proveedor_id:pv.proveedor_id||null,factura:$("ffa")?.value||"",cuf:CUF,conductor_id:$("fco")?$("fco").value:undefined,detalle:$("fd")?.value||"",categoria:$("fc")?.value||"",plan_id:$("fpl")?.value||null,fecha:$("ff")?.value||"",foto1:f1,foto2:f2,confirmar_km:confirmar};
+    const body={tipo,vehiculo_id:+$("rv").value,km:g("fk"),litros:g("fl"),monto:g("fm"),lleno:$("fll")?$("fll").checked:true,proveedor:pv.proveedor,proveedor_id:pv.proveedor_id||null,factura:$("ffa")?.value||"",cuf:CUF,conductor_id:$("fco")?$("fco").value:undefined,detalle:$("fd")?.value||"",categoria:$("fc")?.value||"",plan_id:$("fpl")?.value||null,fecha:$("ff")?.value||"",foto1:f1,foto2:f2,confirmar_km:forzar};
     $("rok").disabled=true;
     try{ const r=await api("eventos",{body}); beepScan();
       toast(r.rendimiento?`Guardado · Rendimiento ${fmtN(r.rendimiento)} km/l`:"Guardado"); if(r.alertas?.length) await avisar(r.alertas.join("\n"),"⚠️ Atención"); PRESEL={vehiculo_id:body.vehiculo_id,tipo}; go("registrar"); }
