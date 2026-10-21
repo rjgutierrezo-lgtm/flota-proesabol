@@ -82,8 +82,19 @@ export async function onRequestPost({ request, env, waitUntil }) {
   if (c.cuf) { const dup = await env.DB.prepare("SELECT e.fecha, v.placa FROM eventos e JOIN vehiculos v ON v.id = e.vehiculo_id WHERE e.empresa_id = ? AND e.cuf = ? AND e.anulado = 0").bind(E(u), c.cuf).first();
     if (dup) return err(`Esta factura ya fue registrada el ${String(dup.fecha).slice(0, 10)} en el vehículo ${dup.placa}`, 409); }
   const { km, litros, monto, lleno, alertas } = c;
-  if (km != null && km < v.km_actual - 1) { if (!b.confirmar_km) return err(`El kilometraje (${km}) es menor al último registrado (${v.km_actual}). Revisa el odómetro.`, 409); alertas.push(`Km menor al anterior (${v.km_actual})`); }
-  if (km != null && km > v.km_actual + 3000 && v.km_actual > 0 && !b.confirmar_km) return err(`Son ${Math.round(km - v.km_actual)} km más que el último registro. ¿Es correcto? Confírmalo para guardar.`, 409);
+  // El km se compara con los registros de ESA fecha: el anterior por fecha (debe ser menor o igual) y el siguiente (debe ser mayor o igual).
+  // Así un registro histórico con km menor al actual no da alerta si encaja en su fecha. Sin registros anteriores se usa el km del vehículo.
+  const fecha = esFecha(b.fecha) && b.fecha !== hoyTZ(u.tz) ? mediodia(b.fecha, u.tz) : new Date().toISOString();
+  const fCorta = f => { const d = new Date(new Date(f).getTime() + (u.tz ?? -4) * 3600e3).toISOString().slice(0, 10).split("-"); return `${d[2]}/${d[1]}/${d[0]}`; };
+  if (km != null) {
+    const [ant, sig] = await env.DB.batch([
+      env.DB.prepare("SELECT km, fecha FROM eventos WHERE vehiculo_id = ? AND anulado = 0 AND km IS NOT NULL AND fecha <= ? ORDER BY fecha DESC, id DESC LIMIT 1").bind(v.id, fecha),
+      env.DB.prepare("SELECT km, fecha FROM eventos WHERE vehiculo_id = ? AND anulado = 0 AND km IS NOT NULL AND fecha > ? ORDER BY fecha ASC, id ASC LIMIT 1").bind(v.id, fecha)]);
+    const a = ant.results[0], s = sig.results[0], base = a ? a.km : (s ? null : v.km_actual);
+    if (base != null && km < base - 1) { if (!b.confirmar_km) return err(`El kilometraje (${km}) es menor al último registrado (${base}${a ? " el " + fCorta(a.fecha) : ""}). Revisa el odómetro. Si es un registro de otra fecha, pon su fecha real en el campo Fecha.`, 409); alertas.push(`Km menor al anterior (${base})`); }
+    if (s && km > s.km + 1) { if (!b.confirmar_km) return err(`El kilometraje (${km}) es mayor al de un registro posterior (${s.km} el ${fCorta(s.fecha)}). Revisa el odómetro o la fecha.`, 409); alertas.push(`Km mayor a un registro posterior (${s.km})`); }
+    if (base != null && base > 0 && km > base + 3000 && !b.confirmar_km) return err(`Son ${Math.round(km - base)} km más que el último registro. ¿Es correcto? Confírmalo para guardar.`, 409);
+  }
   let rendimiento = null;
   if (tipo === "combustible" && lleno && km != null) { // rendimiento entre dos cargas de tanque lleno
     const prev = await env.DB.prepare("SELECT km, id FROM eventos WHERE vehiculo_id = ? AND tipo = 'combustible' AND lleno = 1 AND anulado = 0 AND km < ? ORDER BY km DESC LIMIT 1").bind(v.id, km).first();
@@ -95,12 +106,12 @@ export async function onRequestPost({ request, env, waitUntil }) {
   }
   let plan = null; if (tipo === "mantenimiento" && b.plan_id) { plan = await env.DB.prepare("SELECT * FROM planes WHERE id = ? AND vehiculo_id = ? AND activo = 1").bind(int(b.plan_id), v.id).first(); if (!plan) return err("Plan de mantenimiento no válido"); }
   let f1 = null, f2 = null; try { if (b.foto1) f1 = await guardarFoto(env, E(u), b.foto1); if (b.foto2) f2 = await guardarFoto(env, E(u), b.foto2); } catch (e) { return err(e.message); }
-  const fecha = esFecha(b.fecha) && b.fecha !== hoyTZ(u.tz) ? mediodia(b.fecha, u.tz) : new Date().toISOString();
   const st = [env.DB.prepare(`INSERT INTO eventos(empresa_id, sucursal_id, vehiculo_id, tipo, fecha, km, litros, monto, lleno, proveedor, detalle, categoria, plan_id, foto1, foto2, conductor_id, usuario_id, rendimiento, alerta, plan_km_antes, plan_fecha_antes, factura, cuf)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(E(u), v.sucursal_id, v.id, tipo, fecha, km, litros, monto, lleno, c.proveedor, c.detalle, c.categoria, plan?.id ?? null, f1, f2, cid, u.id, rendimiento, alertas.join(" · ") || null,
       plan ? plan.ultimo_km : null, plan ? plan.ultima_fecha : null, c.factura, c.cuf)];
   if (km != null && km > v.km_actual) st.push(env.DB.prepare("UPDATE vehiculos SET km_actual = ? WHERE id = ?").bind(km, v.id));
-  if (plan) st.push(env.DB.prepare("UPDATE planes SET ultimo_km = ?, ultima_fecha = ? WHERE id = ?").bind(km ?? v.km_actual, fecha.slice(0, 10), plan.id));
+  // un mantenimiento histórico (anterior al último del plan) no hace retroceder el plan
+  if (plan && (!plan.ultima_fecha || fecha.slice(0, 10) >= plan.ultima_fecha)) st.push(env.DB.prepare("UPDATE planes SET ultimo_km = ?, ultima_fecha = ? WHERE id = ?").bind(km ?? v.km_actual, fecha.slice(0, 10), plan.id));
   const r = await env.DB.batch(st);
   if (Math.random() < 0.05) { const emp = await env.DB.prepare(PERFIL_EMPRESA).bind(E(u)).first(); await limpiarFotos(env, E(u), emp.retencion_fotos); }
   if (alertas.length) { // aviso inmediato a supervisores del parqueo (sin demorar la respuesta)

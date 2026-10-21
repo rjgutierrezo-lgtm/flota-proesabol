@@ -571,7 +571,7 @@ async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.est
       toast(r.rendimiento?`Guardado · Rendimiento ${fmtN(r.rendimiento)} km/l`:"Guardado"); if(r.alertas?.length) await avisar(r.alertas.join("\n"),"⚠️ Atención"); PRESEL={vehiculo_id:body.vehiculo_id,tipo}; go("registrar"); }
     catch(e){ $("rok").disabled=false;
       if(e.offline){ if(encolar(body)){ toast("Sin conexión: el registro quedó guardado en este equipo y se enviará solo cuando vuelva la señal"); PRESEL={vehiculo_id:body.vehiculo_id,tipo}; return go("registrar"); } return $("re").textContent="Sin conexión y sin espacio para guardar el registro en este equipo"; }
-      if(/menor al último|más que el último/.test(e.message)&&await confirmar(e.message+"\n\n¿Guardar igual?",{ok:"Guardar igual"})) return guardar(true); $("re").textContent=e.message; } };
+      if(/menor al último|más que el último|mayor al de un registro posterior/.test(e.message)&&await confirmar(e.message+"\n\n¿Guardar igual?",{ok:"Guardar igual"})) return guardar(true); $("re").textContent=e.message; } };
   $("rok").onclick=()=>guardar(false); }
 
 // ===================== Vehículos =====================

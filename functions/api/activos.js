@@ -36,7 +36,7 @@ export async function onRequestPost({ request, env }) {
   const st = [env.DB.prepare("INSERT INTO activos(empresa_id, vehiculo_id, tipo, marca, detalle, posicion, fecha_instalacion, km_instalacion, costo, vida_km, vida_meses, nota) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)").bind(E(u), v.id, ...c)];
   const gasto = costo > 0 && b.registrar_gasto !== false;
   if (gasto) st.push(env.DB.prepare(`INSERT INTO eventos(empresa_id, sucursal_id, vehiculo_id, tipo, fecha, km, monto, lleno, proveedor, detalle, categoria, conductor_id, usuario_id, factura)
-      VALUES(?,?,?,'gasto',?,?,?,0,?,?,?,?,?,?)`).bind(E(u), v.sucursal_id, v.id, mediodia(c[4], u.tz), c[5], costo, txt(b.proveedor, 80),
+      VALUES(?,?,?,'gasto',?,?,?,0,?,?,?,?,?,?)`).bind(E(u), v.sucursal_id, v.id, (c[4] === hoyTZ(u.tz) ? new Date().toISOString() : mediodia(c[4], u.tz)), c[5], costo, txt(b.proveedor, 80),
       `${NOM_ACTIVO[c[0]]}${c[1] ? " " + c[1] : ""}${c[2] ? " " + c[2] : ""}${c[3] ? " (" + c[3] + ")" : ""}`.slice(0, 300), c[0] === "llanta" ? "Llantas" : "Repuesto", v.conductor_id, u.id, txt(b.factura, 40)));
   const r = await env.DB.batch(st);
   return json({ ok: true, id: r[0].meta.last_row_id, gasto });
