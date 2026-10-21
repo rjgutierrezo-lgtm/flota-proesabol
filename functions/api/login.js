@@ -6,7 +6,8 @@ async function perfil(env, u) {
     if (u.conductor_id) out.conductor = (await env.DB.prepare("SELECT nombre FROM conductores WHERE id = ? AND empresa_id = ?").bind(u.conductor_id, u.empresa_id).first())?.nombre || null;
     out.empresa = await env.DB.prepare(PERFIL_EMPRESA).bind(u.empresa_id).first();
     out.aviso = aviso(out.empresa); out.plan = await limites(env, u.empresa_id);
-    out.sucursales = await misSucursales(env, { ...u, sucursales: Array.isArray(u.sucursales) ? u.sucursales : JSON.parse(u.sucursales || "[]") });
+    const propias = Array.isArray(u.sucursales) ? u.sucursales : JSON.parse(u.sucursales || "[]"); out.restringido = propias.length > 0; // limitado a ciertos parqueos
+    out.sucursales = await misSucursales(env, { ...u, sucursales: propias });
   }
   return out;
 }
