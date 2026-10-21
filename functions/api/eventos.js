@@ -62,7 +62,15 @@ export async function onRequestPost({ request, env, waitUntil }) {
     let cid = ev.conductor_id; // conductor del registro (quién manejaba)
     if (b.conductor_id !== undefined) { const x = int(b.conductor_id) || null; cid = x && !(await env.DB.prepare("SELECT 1 FROM conductores WHERE id = ? AND empresa_id = ?").bind(x, E(u)).first()) ? ev.conductor_id : x; }
     // se conservan las alertas que no dependen de los datos editados; el rendimiento se recalcula después
-    const viejas = (ev.alerta || "").split(" · ").filter(s => s && !/^Cargó |^Rendimiento /.test(s));
+    const viejas = (ev.alerta || "").split(" · ").filter(s => s && !/^Cargó |^Rendimiento |^Km (menor|mayor) /.test(s));
+    if (c.km != null) { // el km se vuelve a comparar con los registros de su fecha (sin contar este)
+      const [ant, sig] = await env.DB.batch([
+        env.DB.prepare("SELECT km FROM eventos WHERE vehiculo_id = ? AND anulado = 0 AND km IS NOT NULL AND id <> ? AND fecha <= ? ORDER BY fecha DESC, id DESC LIMIT 1").bind(ev.vehiculo_id, ev.id, fecha),
+        env.DB.prepare("SELECT km FROM eventos WHERE vehiculo_id = ? AND anulado = 0 AND km IS NOT NULL AND id <> ? AND fecha > ? ORDER BY fecha ASC, id ASC LIMIT 1").bind(ev.vehiculo_id, ev.id, fecha)]);
+      const a = ant.results[0], s = sig.results[0];
+      if (a && c.km < a.km - 1) c.alertas.push(`Km menor al anterior (${a.km})`);
+      if (s && c.km > s.km + 1) c.alertas.push(`Km mayor a un registro posterior (${s.km})`);
+    }
     await env.DB.prepare(`UPDATE eventos SET km=?, litros=?, monto=?, lleno=?, proveedor=?, detalle=?, categoria=?, fecha=?, alerta=?, factura=?, conductor_id=? WHERE id=?`)
       .bind(c.km, c.litros, c.monto, c.lleno, c.proveedor, c.detalle, c.categoria, fecha, [...viejas, ...c.alertas].join(" · ") || null, c.factura, cid, ev.id).run();
     await recalcularVehiculo(env, ev.vehiculo_id);
