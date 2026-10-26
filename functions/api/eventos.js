@@ -1,16 +1,17 @@
 // Registros de la flota: combustible, mantenimiento, lavado, gasto, kilometraje.
 // GET ?vehiculo_id=&tipo=&desde=&hasta=&pagina=&csv=1 | POST registrar | POST {id, anular:true, motivo} | POST {id, editar:true, ...campos}
 // Anular: permiso "reportes". Editar: permiso "reportes", o quien lo registró dentro de las 24 horas.
-import { json, err, txt, int, num, sesion, puede, misSucursales, guardarFoto, limpiarFotos, hoyTZ, inicioDia, finDia, mediodia, recalcularVehiculo, resolverProveedor, PERFIL_EMPRESA, E } from "../../lib/db.js";
+import { json, err, txt, int, num, sesion, puede, misSucursales, guardarFoto, limpiarFotos, hoyTZ, inicioDia, finDia, mediodia, recalcularVehiculo, resolverProveedor, limpiarItems, PERFIL_EMPRESA, E } from "../../lib/db.js";
 const TIPOS = ["combustible", "mantenimiento", "lavado", "gasto", "kilometraje"];
 const PAGINA = 200, MAX_CSV = 5000;
 export async function onRequestGet({ request, env }) {
-  const u = await sesion(request, env); if (!puede(u, "registrar") && !puede(u, "reportes") && !puede(u, "mantenimiento")) return err("Sin permiso", 403);
+  const u = await sesion(request, env); if (!["registrar", "combustible", "reportes", "mantenimiento"].some(p => puede(u, p))) return err("Sin permiso", 403);
   const q = new URL(request.url).searchParams, sucs = (await misSucursales(env, u)).map(s => s.id); if (!sucs.length) return json({ ok: true, eventos: [], mas: false });
   const w = [`e.empresa_id = ?`, `e.sucursal_id IN (${sucs.map(() => "?").join(",")})`], v = [E(u), ...sucs];
   if (q.get("vehiculo_id")) { w.push("e.vehiculo_id = ?"); v.push(int(q.get("vehiculo_id"))); }
   if (q.get("sucursal_id") && sucs.includes(int(q.get("sucursal_id")))) { w.push("e.sucursal_id = ?"); v.push(int(q.get("sucursal_id"))); }
   if (TIPOS.includes(q.get("tipo"))) { w.push("e.tipo = ?"); v.push(q.get("tipo")); }
+  if (["preventivo", "correctivo"].includes(q.get("tipo"))) { w.push("e.tipo = 'mantenimiento' AND e.clase = ?"); v.push(q.get("tipo")); }
   const desde = txt(q.get("desde"), 10), hasta = txt(q.get("hasta"), 10);
   if (!puede(u, "reportes")) { w.push("e.usuario_id = ?"); v.push(u.id); }
   if (desde) { w.push("e.fecha >= ?"); v.push(inicioDia(desde, u.tz)); }
@@ -29,10 +30,14 @@ function validar(tipo, b, v) {
   if (["combustible", "kilometraje"].includes(tipo) && !(km > 0)) return { error: "Escribe el kilometraje (odómetro)" };
   if (tipo === "combustible" && !(litros > 0)) return { error: "Escribe los litros cargados" };
   if (["combustible", "lavado", "gasto"].includes(tipo) && !(monto > 0)) return { error: "Escribe el monto" };
+  // mantenimiento: preventivo o correctivo, con líneas de gasto (repuesto / mano de obra). Si hay líneas, el monto es su suma.
+  let clase = "", items = null;
+  if (tipo === "mantenimiento") { clase = b.clase === "correctivo" || (!b.clase && !b.plan_id) ? "correctivo" : "preventivo"; const li = limpiarItems(b.items); if (li.error) return li;
+    if (li.items.length) items = li.items; }
   const alertas = [];
   if (tipo === "combustible" && v.tanque_l > 0 && litros > v.tanque_l * 1.05) alertas.push(`Cargó ${litros} L y el tanque es de ${v.tanque_l} L`);
   const lleno = tipo === "combustible" ? (b.lleno === false ? 0 : 1) : 0;
-  return { km, litros, monto, lleno, alertas, proveedor: txt(b.proveedor, 80), detalle: txt(b.detalle, 300), categoria: txt(b.categoria, 40), factura: txt(b.factura, 40), cuf: txt(b.cuf, 120).replace(/[^0-9A-Fa-f]/g, "").toUpperCase() || null };
+  return { km, litros, monto: items ? Math.round(items.reduce((a, x) => a + x.m, 0) * 100) / 100 : monto, clase, items, lleno, alertas, proveedor: txt(b.proveedor, 80), detalle: txt(b.detalle, 300), categoria: txt(b.categoria, 40), factura: txt(b.factura, 40), cuf: txt(b.cuf, 120).replace(/[^0-9A-Fa-f]/g, "").toUpperCase() || null };
 }
 import { notificar, supervisores } from "../../lib/push.js";
 export async function onRequestPost({ request, env, waitUntil }) {
@@ -71,19 +76,22 @@ export async function onRequestPost({ request, env, waitUntil }) {
       if (a && c.km < a.km - 1) c.alertas.push(`Km menor al anterior (${a.km})`);
       if (s && c.km > s.km + 1) c.alertas.push(`Km mayor a un registro posterior (${s.km})`);
     }
-    await env.DB.prepare(`UPDATE eventos SET km=?, litros=?, monto=?, lleno=?, proveedor=?, detalle=?, categoria=?, fecha=?, alerta=?, factura=?, conductor_id=? WHERE id=?`)
-      .bind(c.km, c.litros, c.monto, c.lleno, c.proveedor, c.detalle, c.categoria, fecha, [...viejas, ...c.alertas].join(" · ") || null, c.factura, cid, ev.id).run();
+    // un mantenimiento de un plan siempre es preventivo; las líneas de gasto solo cambian si se enviaron
+    const clase = ev.tipo !== "mantenimiento" ? ev.clase : ev.plan_id ? "preventivo" : b.clase ? c.clase : ev.clase, items = b.items !== undefined ? (c.items ? JSON.stringify(c.items) : null) : ev.items;
+    await env.DB.prepare(`UPDATE eventos SET km=?, litros=?, monto=?, lleno=?, proveedor=?, detalle=?, categoria=?, fecha=?, alerta=?, factura=?, conductor_id=?, clase=?, items=? WHERE id=?`)
+      .bind(c.km, c.litros, c.monto, c.lleno, c.proveedor, c.detalle, c.categoria, fecha, [...viejas, ...c.alertas].join(" · ") || null, c.factura, cid, clase, items, ev.id).run();
     await recalcularVehiculo(env, ev.vehiculo_id);
     return json({ ok: true });
   }
   // ---------- registrar ----------
   const tipo = b.tipo; if (!TIPOS.includes(tipo)) return err("Tipo de registro no válido");
-  if (tipo === "mantenimiento" ? !puede(u, "mantenimiento") : !puede(u, "registrar")) return err("No tienes permiso para este registro", 403);
+  if (tipo === "mantenimiento" ? !puede(u, "mantenimiento") : !puede(u, "registrar") && !(tipo === "combustible" && puede(u, "combustible"))) return err("No tienes permiso para este registro", 403);
   const v = await env.DB.prepare("SELECT * FROM vehiculos WHERE id = ? AND empresa_id = ?").bind(int(b.vehiculo_id), E(u)).first();
   if (!v || !sucs.includes(v.sucursal_id)) return err("Vehículo no encontrado", 404);
   if (v.estado === "baja") return err("Ese vehículo está dado de baja");
   if (u.foto_obligatoria && ["combustible", "mantenimiento"].includes(tipo) && !b.foto1) return err("Tu empresa exige la foto de la factura en este registro. Tómala o elige el archivo antes de guardar.");
   const c = validar(tipo, b, v); if (c.error) return err(c.error);
+  if (c.clase === "correctivo" && b.clase && !c.items) return err("Agrega al menos una línea de gasto: repuesto o mano de obra");
   let cid = u.conductor_id || v.conductor_id; // quién manejaba: el conductor enlazado al usuario, o el asignado al vehículo
   if (b.conductor_id !== undefined && b.conductor_id !== null) { const x = int(b.conductor_id) || null; cid = !x ? null : (await env.DB.prepare("SELECT 1 FROM conductores WHERE id = ? AND empresa_id = ?").bind(x, E(u)).first()) ? x : v.conductor_id; }
   const pr = await resolverProveedor(env, E(u), tipo, b); if (pr.error) return err(pr.error); c.proveedor = pr.nombre;
@@ -112,11 +120,11 @@ export async function onRequestPost({ request, env, waitUntil }) {
       if (rendimiento != null && v.rendimiento_esp > 0 && rendimiento < v.rendimiento_esp * (1 - emp.tolerancia_consumo / 100)) alertas.push(`Rendimiento bajo: ${rendimiento} km/l (esperado ${v.rendimiento_esp})`);
       if (rendimiento != null && v.rendimiento_esp > 0 && rendimiento > v.rendimiento_esp * 1.6) alertas.push(`Rendimiento muy alto (${rendimiento} km/l): puede faltar registrar alguna carga`); }
   }
-  let plan = null; if (tipo === "mantenimiento" && b.plan_id) { plan = await env.DB.prepare("SELECT * FROM planes WHERE id = ? AND vehiculo_id = ? AND activo = 1").bind(int(b.plan_id), v.id).first(); if (!plan) return err("Plan de mantenimiento no válido"); }
+  let plan = null; if (tipo === "mantenimiento" && c.clase === "preventivo" && b.plan_id) { plan = await env.DB.prepare("SELECT * FROM planes WHERE id = ? AND vehiculo_id = ? AND activo = 1").bind(int(b.plan_id), v.id).first(); if (!plan) return err("Plan de mantenimiento no válido"); }
   let f1 = null, f2 = null; try { if (b.foto1) f1 = await guardarFoto(env, E(u), b.foto1); if (b.foto2) f2 = await guardarFoto(env, E(u), b.foto2); } catch (e) { return err(e.message); }
-  const st = [env.DB.prepare(`INSERT INTO eventos(empresa_id, sucursal_id, vehiculo_id, tipo, fecha, km, litros, monto, lleno, proveedor, detalle, categoria, plan_id, foto1, foto2, conductor_id, usuario_id, rendimiento, alerta, plan_km_antes, plan_fecha_antes, factura, cuf)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(E(u), v.sucursal_id, v.id, tipo, fecha, km, litros, monto, lleno, c.proveedor, c.detalle, c.categoria, plan?.id ?? null, f1, f2, cid, u.id, rendimiento, alertas.join(" · ") || null,
-      plan ? plan.ultimo_km : null, plan ? plan.ultima_fecha : null, c.factura, c.cuf)];
+  const st = [env.DB.prepare(`INSERT INTO eventos(empresa_id, sucursal_id, vehiculo_id, tipo, fecha, km, litros, monto, lleno, proveedor, detalle, categoria, plan_id, foto1, foto2, conductor_id, usuario_id, rendimiento, alerta, plan_km_antes, plan_fecha_antes, factura, cuf, clase, items)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(E(u), v.sucursal_id, v.id, tipo, fecha, km, litros, monto, lleno, c.proveedor, c.detalle, c.categoria, plan?.id ?? null, f1, f2, cid, u.id, rendimiento, alertas.join(" · ") || null,
+      plan ? plan.ultimo_km : null, plan ? plan.ultima_fecha : null, c.factura, c.cuf, c.clase, c.items ? JSON.stringify(c.items) : null)];
   if (km != null && km > v.km_actual) st.push(env.DB.prepare("UPDATE vehiculos SET km_actual = ? WHERE id = ?").bind(km, v.id));
   // un mantenimiento histórico (anterior al último del plan) no hace retroceder el plan
   if (plan && (!plan.ultima_fecha || fecha.slice(0, 10) >= plan.ultima_fecha)) st.push(env.DB.prepare("UPDATE planes SET ultimo_km = ?, ultima_fecha = ? WHERE id = ?").bind(km ?? v.km_actual, fecha.slice(0, 10), plan.id));

@@ -13,7 +13,7 @@ export function leerQR(texto) {
 const fechaISO = f => { const s = String(f || ""); let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s); if (m) return `${m[1]}-${m[2]}-${m[3]}`; m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(s); if (m) return `${m[3]}-${m[2]}-${m[1]}`; const d = new Date(s); return isNaN(d) ? null : d.toISOString().slice(0, 10); };
 export async function onRequestPost({ request, env }) {
   const u = await sesion(request, env); if (!u || u.super) return err("Inicia sesión", 401);
-  if (!puede(u, "registrar") && !puede(u, "mantenimiento") && !puede(u, "reportes")) return err("Sin permiso", 403);
+  if (!puede(u, "registrar") && !puede(u, "combustible") && !puede(u, "mantenimiento") && !puede(u, "reportes")) return err("Sin permiso", 403);
   const b = await request.json().catch(() => ({})), q = leerQR(b.qr);
   if (!q) return err("Ese QR no es de una factura electrónica del SIN (debe traer nit, cuf y número)");
   // El SIN no responde a consultas desde la red de Cloudflare, así que normalmente el teléfono consulta directo (su API permite CORS)

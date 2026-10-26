@@ -131,3 +131,8 @@ dialog::backdrop{background:rgba(10,15,30,.5)}.dlg{padding:18px}.dlg .acts{displ
   .mant .c-p{grid-column:1/-1;grid-row:3;font-weight:600}.mant .c-k{grid-column:1;grid-row:4;color:var(--muted);font-size:.85rem}.mant .c-n{grid-column:2;grid-row:4;text-align:right}.mant .c-b{grid-column:1/-1;grid-row:5;margin-top:6px}.mant .c-b button{width:100%}
 }
 #colaBar:empty{display:none}
+/* Líneas de gasto del mantenimiento (repuesto / mano de obra) */
+.linea{display:grid;grid-template-columns:1fr 1fr 120px 40px;gap:6px;margin-bottom:8px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:10px}
+.linea select,.linea input{margin:0;min-width:0}.linea [data-x]{padding:8px 0}.linea [data-k=d]{grid-column:1/-1;grid-row:2}
+#fm[readonly],#em[readonly]{background:var(--bg);font-weight:700}
+@media (max-width:720px){.linea{grid-template-columns:1fr 1fr 40px}.linea [data-k=m]{grid-column:1/-1;grid-row:3}.linea [data-x]{grid-column:3;grid-row:1}}

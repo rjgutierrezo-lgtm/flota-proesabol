@@ -1,5 +1,5 @@
 // POST: datos de la empresa (permiso "usuarios"): nombre, contacto, país/moneda/zona horaria, nombres de documentos, avisos por correo, foto obligatoria y ficha pública.
-import { json, err, txt, int, num, sesion, puede, PERFIL_EMPRESA, PAISES, E } from "../../lib/db.js";
+import { json, err, txt, int, num, sesion, puede, PERFIL_EMPRESA, PAISES, limpiarCatMant, E } from "../../lib/db.js";
 export async function onRequestPost({ request, env }) {
   const u = await sesion(request, env); if (!puede(u, "usuarios")) return err("Sin permiso", 403);
   const b = await request.json().catch(() => ({}));
@@ -11,5 +11,8 @@ export async function onRequestPost({ request, env }) {
     .bind(txt(b.nombre, 100) || "Mi empresa", txt(b.whatsapp, 20).replace(/\D/g, ""), txt(b.direccion, 200), txt(b.moneda, 6) || P.moneda,
       Math.min(80, Math.max(5, int(b.tolerancia_consumo) || 20)), Math.min(1095, Math.max(30, int(b.retencion_fotos) || 365)), email, txt(b.email, 120).toLowerCase(),
       b.foto_obligatoria ? 1 : 0, b.ficha_publica === false ? 0 : 1, pais, tz, txt(b.doc1, 40) || P.doc1, txt(b.doc2, 40) || P.doc2, E(u)).run();
+  // tipos de gasto y categorías de mantenimiento (vacío = lista predeterminada)
+  if (b.cat_mant !== undefined) { const cm = b.cat_mant ? limpiarCatMant(b.cat_mant) : null; if (b.cat_mant && !cm) return err("Revisa la lista de tipos de gasto: cada línea es «Tipo: categoría, categoría…»");
+    await env.DB.prepare("UPDATE empresas SET cat_mant = ? WHERE id = ?").bind(cm ? JSON.stringify(cm) : "", E(u)).run(); }
   return json({ ok: true, empresa: await env.DB.prepare(PERFIL_EMPRESA).bind(E(u)).first() });
 }
