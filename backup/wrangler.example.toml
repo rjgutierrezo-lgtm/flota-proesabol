@@ -1,12 +1,9 @@
-# Worker "flota-backup": backup diario de la base D1 en el bucket R2 "flota-backups".
-# Se despliega una vez por cuenta de Cloudflare desde esta carpeta: copia este archivo como wrangler.toml (no se sube a git) y:
-#   1) npx wrangler r2 bucket create flota-backups
-#   2) npx wrangler d1 list            → copia el id de la base de FlotaControl en database_id
-#   3) npx wrangler deploy
-#   4) npx wrangler secret put BACKUP_KEY   (clave larga para generar/listar/bajar backups a mano)
+# Worker "flota-backup": backup diario de la base D1 de FlotaControl (ver LEEME.md).
+# Copia este archivo como wrangler.toml en esta carpeta (no se sube a git), pon el id de la base y despliega con `npx wrangler deploy`.
 name = "flota-backup"
 main = "index.js"
 compatibility_date = "2026-01-01"
+workers_dev = true   # dirección *.workers.dev para generar un backup a mano con ?key=BACKUP_KEY
 
 [triggers]
 crons = ["0 7 * * *"]   # 07:00 UTC = 03:00 en Bolivia
@@ -14,8 +11,17 @@ crons = ["0 7 * * *"]   # 07:00 UTC = 03:00 en Bolivia
 [[d1_databases]]
 binding = "DB"
 database_name = "flota"
-database_id = "PONER-AQUI-EL-ID-DE-LA-BASE"
+database_id = "PONER-AQUI-EL-ID-DE-LA-BASE"   # npx wrangler d1 list
 
-[[r2_buckets]]
-binding = "BACKUPS"
-bucket_name = "flota-backups"
+[vars]
+GITHUB_REPO = "DUEÑO/flota-backups"   # repo PRIVADO solo para backups
+
+# Secretos (npx wrangler secret put NOMBRE, o en el panel: Worker → Settings → Variables and Secrets):
+#   GITHUB_TOKEN  token fine-grained con permiso "Contents: Read and write" solo en el repo de backups
+#   BACKUP_CLAVE  frase larga para cifrar los backups (guárdala aparte: sin ella no se pueden abrir)
+#   BACKUP_KEY    clave para generar un backup a mano: https://flota-backup.<cuenta>.workers.dev/?key=...
+
+# Opcional, si la cuenta tiene R2: además guarda en el bucket
+# [[r2_buckets]]
+# binding = "BACKUPS"
+# bucket_name = "flota-backups"
