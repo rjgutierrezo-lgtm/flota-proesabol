@@ -49,7 +49,8 @@ async function gh(env, metodo, ruta, cuerpo) {
 async function aGitHub(env, dia, b) {
   if (!env.BACKUP_CLAVE || String(env.BACKUP_CLAVE).length < 16) throw new Error("Falta el secreto BACKUP_CLAVE (mínimo 16 caracteres) para cifrar el backup");
   const repo = await gh(env, "GET", ""), rama = repo.default_branch || "main";
-  const arbol = await gh(env, "GET", `/git/trees/${encodeURIComponent(rama)}?recursive=1`), hay = new Map((arbol.tree || []).filter(x => x.type === "blob").map(x => [x.path, x.sha]));
+  // repo recién creado sin archivos: GitHub responde 409 y se empieza con la lista vacía (el primer archivo crea la rama)
+  const arbol = await gh(env, "GET", `/git/trees/${encodeURIComponent(rama)}?recursive=1`).catch(e => { if (/GitHub 409/.test(e.message)) return { tree: [] }; throw e; }), hay = new Map((arbol.tree || []).filter(x => x.type === "blob").map(x => [x.path, x.sha]));
   const ruta = `datos/${dia}.sql.gz.enc`;
   await gh(env, "PUT", `/contents/${ruta}`, { message: `Backup ${dia}`, branch: rama, content: b64(await cifrar(env, b.gz)), ...(hay.has(ruta) ? { sha: hay.get(ruta) } : {}) });
   // fotos guardadas en la base: cada una se sube una sola vez (ya vienen en base64, no se procesan)
