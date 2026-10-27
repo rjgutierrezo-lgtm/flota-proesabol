@@ -1,0 +1,21 @@
+# Worker "flota-backup": backup diario de la base D1 en el bucket R2 "flota-backups".
+# Se despliega una vez por cuenta de Cloudflare desde esta carpeta: copia este archivo como wrangler.toml (no se sube a git) y:
+#   1) npx wrangler r2 bucket create flota-backups
+#   2) npx wrangler d1 list            → copia el id de la base de FlotaControl en database_id
+#   3) npx wrangler deploy
+#   4) npx wrangler secret put BACKUP_KEY   (clave larga para generar/listar/bajar backups a mano)
+name = "flota-backup"
+main = "index.js"
+compatibility_date = "2026-01-01"
+
+[triggers]
+crons = ["0 7 * * *"]   # 07:00 UTC = 03:00 en Bolivia
+
+[[d1_databases]]
+binding = "DB"
+database_name = "flota"
+database_id = "PONER-AQUI-EL-ID-DE-LA-BASE"
+
+[[r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "flota-backups"
