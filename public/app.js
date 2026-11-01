@@ -201,6 +201,9 @@ async function empresaForm(e){
     <h3 style="margin-top:16px">Historial de pagos</h3><div class="tbl"><table><thead><tr><th>Fecha</th><th class="n">Monto</th><th>Meses</th><th>Nuevo vencimiento</th><th>Método</th><th>Comprobante</th></tr></thead><tbody>
       ${pg.map(p=>`<tr><td>${esc(p.fecha.slice(0,10))}</td><td class="n">Bs ${fmtN(p.monto)}</td><td>${p.meses}</td><td>${esc(p.vence_nuevo)}</td><td>${esc(p.metodo||"")}</td><td>${esc(p.ref||"")}</td></tr>`).join("")||'<tr><td colspan="6" class="muted">Sin pagos registrados.</td></tr>'}</tbody></table></div>
     <h3 style="margin-top:16px">Restablecer contraseña</h3><div class="row"><div class="field"><label>Usuario</label><input id="ru" placeholder="${esc((e.admins||"").split(", ")[0]||"")}"></div><div class="field"><label>Nueva contraseña</label><input id="rp" type="password"></div></div>
+    <div class="card" style="margin-top:16px"><h3>📥 Importar desde Excel</h3>
+      <p class="muted">Carga conductores y vehículos (con sus fotos) desde un .xlsx: una hoja con columnas Regional, Nombres, Apellidos, CI, Teléfono, Categoría de licencia y Vencimiento, y otra con Regional, Placa, Marca, Modelo, Año, Tipo, Combustible, Capacidad tanque, Rendimiento, Km actual, Conductor asignado, Vencimiento SOAT / Inspección / Seguro y Foto. Antes de cargar verás una vista previa.</p>
+      <div class="acts" style="justify-content:flex-start"><button class="sec" id="eimp">Elegir archivo Excel…</button></div></div>
     <div class="card" style="margin-top:16px;border:1px solid var(--bad)"><h3>🗑️ Empezar de cero</h3>
       <p class="muted">Borra los datos de esta empresa para iniciar con la base en blanco. Siempre quedan la empresa, su configuración, los usuarios y los parqueos. No se puede deshacer desde la app: genera antes un backup.</p>
       <label class="check"><input type="radio" name="lmodo" value="registros" checked> Solo los registros: cargas, mantenimientos, gastos, fotos y movimientos de repuestos (vehículos, conductores y planes se quedan)</label>
@@ -225,7 +228,71 @@ async function empresaForm(e){
       if(t==null) return; const fin=cargando("Limpiando…");
       try{ const j=await api("plataforma",{body:{id:e.id,limpiar:modo,confirmar:t}}); fin(); closeDlg();
         await avisar(`Se borraron ${j.borrados.eventos} registros${modo==="todo"?`, ${j.borrados.vehiculos} vehículos y ${j.borrados.conductores} conductores`:""}. ${e.nombre} quedó lista para empezar.`,"Listo"); go("plataforma"); }
-      catch(x){ fin(); errEl.textContent=x.message; } }; }); }
+      catch(x){ fin(); errEl.textContent=x.message; } };
+    b.querySelector("#eimp").onclick=()=>{ const i=document.createElement("input"); i.type="file"; i.accept=".xlsx"; i.onchange=()=>i.files[0]&&importarExcel(e,i.files[0]); i.click(); }; }); }
+
+// ---------- Importación masiva desde Excel (dueño de la plataforma) ----------
+const normT=s=>String(s??"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/\s+/g," ").trim();
+const titulo=s=>String(s??"").trim().replace(/\s+/g," ").toLowerCase().replace(/(^|[\s-])\p{L}/gu,m=>m.toUpperCase());
+const letraCol=i=>{ let s=""; for(i++;i>0;i=Math.floor((i-1)/26)) s=String.fromCharCode(65+(i-1)%26)+s; return s; };
+// tabla de una hoja: busca la fila de encabezados que cumpla prueba(encabezados normalizados) y devuelve {h, filas, fila0}
+function tablaXlsx(hojas,prueba){ for(const hj of hojas) for(let i=0;i<Math.min(15,hj.filas.length);i++){ const h=(hj.filas[i]||[]).map(normT); if(prueba(h)) return {hoja:hj,h,i}; } return null; }
+const colX=(h,f)=>h.findIndex(f);
+// parecido de nombres: palabras iguales o con una letra distinta (ORTEGA TOROYA ≈ ORTEGA TORDOYA)
+const casi=(a,b)=>{ if(a===b) return true; if(Math.min(a.length,b.length)<5||Math.abs(a.length-b.length)>1) return false; let i=0,j=0,d=0; while(i<a.length&&j<b.length){ if(a[i]===b[j]){i++;j++;continue;} if(++d>1) return false; if(a.length>b.length) i++; else if(b.length>a.length) j++; else {i++;j++;} } return d+(a.length-i)+(b.length-j)<=1; };
+function parecido(nombre,lista){ const t=normT(nombre).split(" ").filter(x=>x.length>=3); let mejor=null,pts=0;
+  for(const c of lista){ const u=normT(c).split(" ").filter(x=>x.length>=3), n=t.filter(x=>u.some(y=>casi(x,y))).length; if(n>pts&&n>=2&&n>=Math.min(t.length,u.length)*.6){ mejor=c; pts=n; } } return mejor; }
+const ALIAS_REG={cbba:"cochabamba",lpz:"la paz",scz:"santa cruz",tja:"tarija",sucre:"chuquisaca",oru:"oruro",pts:"potosi",bni:"beni",pdo:"pando",ea:"el alto"};
+async function importarExcel(e,file){
+  const fin=cargando("Leyendo el Excel…"); let hojas, ya;
+  try{ const {leerXlsx}=await import("/xlsx.js"); hojas=await leerXlsx(file); ya=await api("plataforma?importar="+e.id); fin(); }catch(x){ fin(); return avisar(x.message,"No se pudo leer"); }
+  const {fechaXlsx}=await import("/xlsx.js");
+  const tc=tablaXlsx(hojas,h=>h.some(x=>x.startsWith("nombre"))&&h.some(x=>x==="ci"||x.includes("carnet")||x.includes("licencia")||x.includes("categoria")));
+  const tv=tablaXlsx(hojas,h=>h.includes("placa"));
+  if(!tc&&!tv) return avisar("No encontré una hoja con columnas de conductores (Nombres, CI…) ni de vehículos (Placa…).","Revisa el archivo");
+  const filasDe=t=>t.hoja.filas.slice(t.i+1).map((f,k)=>({f,fila:t.i+2+k})).filter(x=>x.f.some(v=>v!=null&&v!==""));
+  const regs=new Set(); const cond=[], veh=[];
+  if(tc){ const h=tc.h, c={reg:colX(h,x=>/regional|parqueo|sucursal|ciudad/.test(x)),nom:colX(h,x=>x.startsWith("nombre")),ape:colX(h,x=>x.startsWith("apellido")),ci:colX(h,x=>x==="ci"||x.includes("carnet")),
+      tel:colX(h,x=>/telefono|celular/.test(x)),cat:colX(h,x=>x.includes("categoria")),ven:colX(h,x=>x.includes("vencimiento"))};
+    for(const {f} of filasDe(tc)){ const nombre=titulo([f[c.nom],c.ape>=0?f[c.ape]:""].filter(Boolean).join(" ")); if(!nombre) continue; const reg=c.reg>=0?String(f[c.reg]??"").trim():""; if(reg) regs.add(reg);
+      cond.push({nombre,reg,ci:f[c.ci]!=null?String(f[c.ci]):"",telefono:f[c.tel]!=null?String(f[c.tel]):"",licencia_cat:f[c.cat]!=null?String(f[c.cat]).toUpperCase():"",licencia_vence:fechaXlsx(f[c.ven])}); } }
+  if(tv){ const h=tv.h, c={reg:colX(h,x=>/regional|parqueo|sucursal|ciudad/.test(x)),placa:h.indexOf("placa"),marca:colX(h,x=>x==="marca"),modelo:colX(h,x=>x==="modelo"),anio:colX(h,x=>x==="ano"||x==="anio"||x.startsWith("ano ")),
+      tipo:colX(h,x=>x==="tipo"||x.startsWith("tipo ")),comb:colX(h,x=>x==="combustible"||x==="tipo de combustible"),tanque:colX(h,x=>x.includes("tanque")),rend:colX(h,x=>x.includes("rendimiento")),
+      km:colX(h,x=>(x.includes("km")||x.includes("kilometraje"))&&!x.includes("rendimiento")&&!x.includes("km/l")),cond:colX(h,x=>x.includes("conductor")),soat:colX(h,x=>x.includes("soat")),itv:colX(h,x=>/inspeccion|itv|revision/.test(x)),seg:colX(h,x=>x.includes("seguro")&&!x.includes("soat")),foto:colX(h,x=>x.includes("foto"))};
+    const COMB={gasolina:"Gasolina",diesel:"Diésel",gnv:"GNV",gas:"GNV",electrico:"Eléctrico"}, TIPO={furgon:"Furgón",furgoneta:"Furgoneta",automovil:"Automóvil",vagoneta:"Vagoneta",camioneta:"Camioneta",camion:"Camión",motocicleta:"Motocicleta",moto:"Motocicleta"};
+    const nombres=[...cond.map(x=>x.nombre),...ya.conductores.map(x=>x.nombre)];
+    for(const {f,fila} of filasDe(tv)){ const placa=String(f[c.placa]??"").toUpperCase().replace(/[^A-Z0-9]/g,""); if(placa.length<3) continue; const reg=c.reg>=0?String(f[c.reg]??"").trim():""; if(reg) regs.add(reg);
+      // conductor asignado: el primero de la celda ("A--B"); se busca entre los conductores; si no está se crea; "BACK UP" o vacío = sin conductor
+      const txtC=c.cond>=0?String(f[c.cond]??"").trim():"", partes=txtC.split(/--|\/|;|\|| y /i).map(s=>s.trim()).filter(Boolean), sinC=!partes.length||/^(back ?up|sin|ninguno|-+|n\/a)$/i.test(normT(partes[0]));
+      let conductor=null, nuevoC=false; if(!sinC){ conductor=parecido(partes[0],nombres); if(!conductor){ conductor=titulo(partes[0]); nuevoC=true; if(!cond.some(x=>normT(x.nombre)===normT(conductor))){ cond.push({nombre:conductor,reg,ci:"",telefono:"",licencia_cat:"",licencia_vence:null,desdeVeh:true}); nombres.push(conductor); } } }
+      const blob=c.foto>=0?tv.hoja.fotos[letraCol(c.foto)+fila]:null;
+      veh.push({placa,reg,marca:titulo(f[c.marca]),modelo:String(f[c.modelo]??"").trim().toUpperCase(),anio:f[c.anio]??"",tipo:TIPO[normT(f[c.tipo])]||titulo(f[c.tipo]),combustible:COMB[normT(f[c.comb])]||titulo(f[c.comb]),
+        tanque_l:f[c.tanque]??"",rendimiento_esp:f[c.rend]??"",km_actual:f[c.km]??"",conductor,nuevoC,otros:partes.slice(1),soat_vence:fechaXlsx(f[c.soat]),itv_vence:fechaXlsx(f[c.itv]),seguro_vence:fechaXlsx(f[c.seg]),blob,existe:ya.placas.includes(placa)}); } }
+  const sucOpts=r=>{ const n=normT(r), a=ALIAS_REG[n]||n, pre=ya.sucursales.find(s=>normT(s.nombre)===n||normT(s.nombre).includes(a)||normT(s.nombre).includes(n));
+    return `<option value="">— elegir —</option>${ya.sucursales.map(s=>`<option value="${s.id}" ${pre&&pre.id===s.id?"selected":""}>${esc(s.nombre)}</option>`).join("")}`; };
+  const ciRep=cond.filter((x,i)=>x.ci&&cond.findIndex(y=>y.ci===x.ci)!==i);
+  dialog(`<h3>Importar a ${esc(e.nombre)}</h3><p class="muted">${esc(file.name)}: ${cond.filter(x=>!x.desdeVeh).length} conductores y ${veh.length} vehículos (${veh.filter(v=>v.blob).length} con foto).</p>
+    ${regs.size?`<h3>Parqueo de cada regional</h3>${[...regs].map(r=>`<div class="row"><div class="field"><label>Regional «${esc(r)}» →</label><select data-reg="${esc(r)}">${sucOpts(r)}</select></div></div>`).join("")}`
+      :`<div class="field"><label>Parqueo</label><select data-reg="">${sucOpts("")}</select></div>`}
+    ${ciRep.length?`<p style="color:var(--warn)">⚠️ CI repetido: ${ciRep.map(x=>esc(x.nombre)+" ("+esc(x.ci)+")").join(", ")}. Se cargan igual; revísalos después.</p>`:""}
+    <h3>Vehículos</h3><div class="tbl"><table><thead><tr><th>Placa</th><th>Regional</th><th>Vehículo</th><th class="n">Km</th><th>Conductor</th><th>Foto</th><th></th></tr></thead><tbody>
+    ${veh.map(v=>`<tr><td><b>${esc(v.placa)}</b></td><td>${esc(v.reg)}</td><td>${esc([v.marca,v.modelo,v.anio].filter(Boolean).join(" "))}<br><span class="muted">${esc([v.tipo,v.combustible].filter(Boolean).join(" · "))}</span></td><td class="n">${v.km_actual!==""?fmtN(+v.km_actual||0,0):"—"}</td>
+      <td>${v.conductor?esc(v.conductor)+(v.nuevoC?' <span class="chip warn">nuevo</span>':""):'<span class="muted">sin asignar</span>'}${v.otros.length?`<br><span class="muted">también: ${esc(v.otros.join(", "))}</span>`:""}</td><td>${v.blob?"📷":""}</td><td>${v.existe?'<span class="chip">actualiza</span>':'<span class="chip ok">nuevo</span>'}</td></tr>`).join("")||'<tr><td colspan="7" class="muted">Sin vehículos.</td></tr>'}</tbody></table></div>
+    <h3>Conductores</h3><div class="tbl"><table><thead><tr><th>Nombre</th><th>Regional</th><th>CI</th><th>Teléfono</th><th>Licencia</th></tr></thead><tbody>
+    ${cond.map(c=>`<tr><td>${esc(c.nombre)}${c.desdeVeh?' <span class="chip warn">solo nombre, del vehículo</span>':""}${ya.conductores.some(x=>normT(x.nombre)===normT(c.nombre))?' <span class="chip">actualiza</span>':""}</td><td>${esc(c.reg)}</td><td>${esc(c.ci)}</td><td>${esc(c.telefono)}</td><td>${esc(c.licencia_cat)}${c.licencia_vence?" · vence "+esc(c.licencia_vence):""}</td></tr>`).join("")||'<tr><td colspan="5" class="muted">Sin conductores.</td></tr>'}</tbody></table></div>
+    <p class="muted">Un vehículo con dos conductores («A--B») queda asignado al primero. Los que ya existen (misma placa o mismo nombre) se actualizan solo con los datos que trae el Excel.</p>
+    <div class="err" id="ierr"></div><div class="acts"><button class="sec" id="ino">Cancelar</button><button id="iok">Importar</button></div>`, b=>{
+    b.querySelector("#ino").onclick=closeDlg;
+    b.querySelector("#iok").onclick=async()=>{ const ierr=b.querySelector("#ierr"), mapa={}; ierr.textContent="";
+      for(const s of b.querySelectorAll("[data-reg]")){ if(!s.value) return ierr.textContent=`Elige el parqueo para «${s.dataset.reg||"los datos"}».`; mapa[s.dataset.reg]=s.value; }
+      const suc=r=>mapa[r]??mapa[""]??Object.values(mapa)[0], tot={cn:0,ca:0,vn:0,va:0,err:[]}; cargando("Cargando conductores…");
+      try{ const j=await api("plataforma",{body:{id:e.id,importar:{conductores:cond.map(c=>({...c,sucursal_id:suc(c.reg)}))}}}); tot.cn=j.conductores.nuevos; tot.ca=j.conductores.actualizados; tot.err.push(...j.errores);
+        for(let k=0;k<veh.length;k+=3){ const lote=veh.slice(k,k+3); cargando(`Cargando vehículos ${k+1}–${k+lote.length} de ${veh.length}…`);
+          const datos=await Promise.all(lote.map(async v=>({...v,blob:undefined,otros:undefined,sucursal_id:suc(v.reg),foto:v.blob?await comprimirFoto(v.blob).catch(()=>null):null})));
+          const r=await api("plataforma",{body:{id:e.id,importar:{vehiculos:datos}}}); tot.vn+=r.vehiculos.nuevos; tot.va+=r.vehiculos.actualizados; tot.err.push(...r.errores); }
+        $("dlg2").close(); closeDlg();
+        await avisar(`Conductores: ${tot.cn} nuevos, ${tot.ca} actualizados.\nVehículos: ${tot.vn} nuevos, ${tot.va} actualizados.${tot.err.length?"\n\nNo se pudo:\n"+tot.err.join("\n"):""}`,"Importación terminada"); go("plataforma"); }
+      catch(x){ $("dlg2").close(); ierr.textContent=x.message; } }; }); }
 // Uso de almacenamiento (R2 y D1) para el dueño de la plataforma
 const fmtB=b=>b>=1024**3?fmtN(b/1024**3,2)+" GB":b>=1024**2?fmtN(b/1024**2,1)+" MB":fmtN(b/1024,0)+" KB";
 async function almacenamiento(){ const out=$("almOut"), btn=$("almBtn"); if(!out) return; btn.disabled=true; out.innerHTML='<p class="muted">Recorriendo las fotos…</p>';

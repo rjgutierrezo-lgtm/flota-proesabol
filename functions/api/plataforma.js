@@ -4,12 +4,18 @@
 // POST {id, nombre?, activo?, vence?, plan?, precio?, telefono_admin?, max_sucursales?, max_usuarios?, } → edita
 // POST {id, pago:{monto, meses, metodo, ref, nota}} → registra pago y extiende el vencimiento
 // POST {id, reset_usuario, reset_password} → restablece contraseña
+// POST {id, importar: {conductores, vehiculos}} → carga masiva desde Excel (ver importar) | GET ?importar=ID: parqueos, conductores y placas de la empresa
 // POST {id, limpiar: "registros"|"todo", confirmar: nombre de la empresa} → deja la empresa en blanco (ver limpiarEmpresa)
-import { json, err, txt, int, num, sesion, hashPass, randomHex, validUser, slugify, hoy, sumarMeses, limpiarEmpresa, PERMISOS, PLANES, GRACIA_DIAS, ITER } from "../../lib/db.js";
+import { json, err, txt, int, num, sesion, hashPass, randomHex, validUser, slugify, hoy, sumarMeses, limpiarEmpresa, guardarFoto, normPlaca, revisarLimite, hoyTZ, PLANES_INICIALES, PERMISOS, PLANES, GRACIA_DIAS, ITER } from "../../lib/db.js";
 export async function onRequestGet({ request, env }) {
   const u = await sesion(request, env); if (!u?.super) return err("Solo el dueño de la plataforma", 403);
   const q = new URL(request.url).searchParams;
   if (q.get("pagos")) { const { results } = await env.DB.prepare("SELECT * FROM pagos WHERE empresa_id = ? ORDER BY fecha DESC").bind(int(q.get("pagos"))).all(); return json({ ok: true, pagos: results }); }
+  if (q.get("importar")) { // lo que ya tiene la empresa, para la vista previa de la importación
+    const id = int(q.get("importar")), [s, c, v] = await env.DB.batch([env.DB.prepare("SELECT id, nombre FROM sucursales WHERE empresa_id = ? AND activo = 1 ORDER BY id").bind(id),
+      env.DB.prepare("SELECT id, nombre, sucursal_id FROM conductores WHERE empresa_id = ?").bind(id), env.DB.prepare("SELECT placa FROM vehiculos WHERE empresa_id = ?").bind(id)]);
+    return json({ ok: true, sucursales: s.results, conductores: c.results, placas: v.results.map(x => x.placa) });
+  }
   if (q.get("almacenamiento")) { // uso de R2 (fotos) y de D1 por empresa. R2 se recorre objeto por objeto (máximo 100 páginas de 1000)
     const emp = Object.fromEntries((await env.DB.prepare("SELECT id, nombre FROM empresas").all()).results.map(e => [e.id, e.nombre]));
     const por = {}; const add = (id, k, n) => { por[id] = por[id] || { empresa_id: +id || 0, nombre: emp[id] || "(sin empresa)", r2_objetos: 0, r2_bytes: 0, d1_fotos: 0, d1_bytes: 0, registros: 0 }; por[id][k] += n; };
@@ -63,6 +69,7 @@ export async function onRequestPost({ request, env }) {
       if (txt(b.confirmar, 100).toLowerCase() !== String(e.nombre).trim().toLowerCase()) return err("Escribe el nombre de la empresa exactamente para confirmar");
       return json({ ok: true, borrados: await limpiarEmpresa(env, id, b.limpiar) });
     }
+    if (b.importar) return json({ ok: true, ...(await importar(env, id, b.importar)) });
     const sets = [], vals = [];
     const lim = k => b[k] === "" || b[k] === null ? null : Math.max(0, int(b[k]));
     if (b.nombre !== undefined) { sets.push("nombre = ?"); vals.push(txt(b.nombre, 100)); }
@@ -91,4 +98,43 @@ export async function onRequestPost({ request, env }) {
     env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, permisos, iter) VALUES(?,?,?,?,?,?,?)")
       .bind(eid, au, txt(b.admin_nombre, 80) || au, await hashPass(ap, salt), salt, JSON.stringify(Object.keys(PERMISOS)), ITER)]);
   return json({ ok: true, id: eid, slug });
+}
+
+// Carga masiva desde Excel (la lee el navegador). Conductores: se actualizan por nombre o se crean. Vehículos: se actualizan por placa o se crean con sus planes de ejemplo.
+// v.conductor es el nombre de un conductor de la empresa (ya existente o de esta misma carga). Solo se cambian los campos que vienen con valor; la foto, solo si el vehículo no tiene.
+async function importar(env, e, { conductores = [], vehiculos = [] }) {
+  const emp = await env.DB.prepare("SELECT tz FROM empresas WHERE id = ?").bind(e).first(), hoy = hoyTZ(emp?.tz);
+  const sucs = new Set((await env.DB.prepare("SELECT id FROM sucursales WHERE empresa_id = ?").bind(e).all()).results.map(x => x.id));
+  const f = d => /^\d{4}-\d{2}-\d{2}$/.test(d || "") ? d : null, sid = x => sucs.has(int(x)) ? int(x) : null, clave = s => txt(s, 80).toLowerCase().replace(/\s+/g, " ");
+  const res = { conductores: { nuevos: 0, actualizados: 0 }, vehiculos: { nuevos: 0, actualizados: 0 }, errores: [] };
+  const cond = new Map((await env.DB.prepare("SELECT id, nombre FROM conductores WHERE empresa_id = ?").bind(e).all()).results.map(x => [clave(x.nombre), x.id]));
+  for (const c of conductores.slice(0, 500)) {
+    const nombre = txt(c.nombre, 80).replace(/\s+/g, " "); if (!nombre) continue;
+    const vals = [txt(c.ci, 20), txt(c.telefono, 20), txt(c.licencia_cat, 10), f(c.licencia_vence), sid(c.sucursal_id)], id = cond.get(clave(nombre));
+    if (id) { await env.DB.prepare(`UPDATE conductores SET ci = COALESCE(NULLIF(?, ''), ci), telefono = COALESCE(NULLIF(?, ''), telefono), licencia_cat = COALESCE(NULLIF(?, ''), licencia_cat),
+        licencia_vence = COALESCE(?, licencia_vence), sucursal_id = COALESCE(?, sucursal_id), activo = 1 WHERE id = ?`).bind(...vals, id).run(); res.conductores.actualizados++; }
+    else { cond.set(clave(nombre), (await env.DB.prepare("INSERT INTO conductores(nombre, ci, telefono, licencia_cat, licencia_vence, sucursal_id, activo, empresa_id) VALUES(?,?,?,?,?,?,1,?)")
+        .bind(nombre, ...vals, e).run()).meta.last_row_id); res.conductores.nuevos++; }
+  }
+  for (const v of vehiculos.slice(0, 200)) {
+    const placa = normPlaca(v.placa), s = sid(v.sucursal_id); if (placa.length < 3) continue;
+    if (!s) { res.errores.push(`${placa}: falta el parqueo`); continue; }
+    const cur = await env.DB.prepare("SELECT id, km_actual, foto FROM vehiculos WHERE empresa_id = ? AND placa = ?").bind(e, placa).first();
+    let foto = null; if (!cur?.foto && typeof v.foto === "string" && v.foto.startsWith("data:")) try { foto = await guardarFoto(env, e, v.foto); } catch (x) { res.errores.push(`${placa}: foto no guardada (${x.message})`); }
+    const cid = v.conductor ? cond.get(clave(v.conductor)) || null : null, km = Math.max(0, num(v.km_actual));
+    const vals = [txt(v.marca, 40), txt(v.modelo, 40), int(v.anio) || null, txt(v.tipo, 30), txt(v.combustible, 20), Math.max(0, num(v.tanque_l)) || null, Math.max(0, num(v.rendimiento_esp)) || null,
+      cid, f(v.soat_vence), f(v.itv_vence), f(v.seguro_vence)];
+    if (cur) {
+      await env.DB.prepare(`UPDATE vehiculos SET sucursal_id = ?, marca = COALESCE(NULLIF(?, ''), marca), modelo = COALESCE(NULLIF(?, ''), modelo), anio = COALESCE(?, anio), tipo = COALESCE(NULLIF(?, ''), tipo),
+        combustible = COALESCE(NULLIF(?, ''), combustible), tanque_l = COALESCE(?, tanque_l), rendimiento_esp = COALESCE(?, rendimiento_esp), conductor_id = COALESCE(?, conductor_id),
+        soat_vence = COALESCE(?, soat_vence), itv_vence = COALESCE(?, itv_vence), seguro_vence = COALESCE(?, seguro_vence), foto = COALESCE(?, foto), km_actual = MAX(km_actual, ?) WHERE id = ?`)
+        .bind(s, ...vals, foto, km, cur.id).run(); res.vehiculos.actualizados++; continue;
+    }
+    const lim = await revisarLimite(env, e, "vehiculos"); if (lim) { res.errores.push(`${placa}: ${lim}`); continue; }
+    const id = (await env.DB.prepare(`INSERT INTO vehiculos(sucursal_id, placa, marca, modelo, anio, tipo, combustible, tanque_l, rendimiento_esp, conductor_id, soat_vence, itv_vence, seguro_vence, foto, km_actual, estado, codigo, empresa_id)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'activo',?,?)`).bind(s, placa, vals[0], vals[1], vals[2], vals[3], vals[4] || "Gasolina", vals[5] || 0, vals[6] || 0, ...vals.slice(7), foto, km, randomHex(5), e).run()).meta.last_row_id;
+    await env.DB.batch(PLANES_INICIALES.map(([n, k, d]) => env.DB.prepare("INSERT INTO planes(empresa_id, vehiculo_id, nombre, cada_km, cada_dias, ultimo_km, ultima_fecha) VALUES(?,?,?,?,?,?,?)").bind(e, id, n, k, d, km, hoy)));
+    res.vehiculos.nuevos++;
+  }
+  return res;
 }
