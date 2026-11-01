@@ -201,6 +201,11 @@ async function empresaForm(e){
     <h3 style="margin-top:16px">Historial de pagos</h3><div class="tbl"><table><thead><tr><th>Fecha</th><th class="n">Monto</th><th>Meses</th><th>Nuevo vencimiento</th><th>Método</th><th>Comprobante</th></tr></thead><tbody>
       ${pg.map(p=>`<tr><td>${esc(p.fecha.slice(0,10))}</td><td class="n">Bs ${fmtN(p.monto)}</td><td>${p.meses}</td><td>${esc(p.vence_nuevo)}</td><td>${esc(p.metodo||"")}</td><td>${esc(p.ref||"")}</td></tr>`).join("")||'<tr><td colspan="6" class="muted">Sin pagos registrados.</td></tr>'}</tbody></table></div>
     <h3 style="margin-top:16px">Restablecer contraseña</h3><div class="row"><div class="field"><label>Usuario</label><input id="ru" placeholder="${esc((e.admins||"").split(", ")[0]||"")}"></div><div class="field"><label>Nueva contraseña</label><input id="rp" type="password"></div></div>
+    <div class="card" style="margin-top:16px;border:1px solid var(--bad)"><h3>🗑️ Empezar de cero</h3>
+      <p class="muted">Borra los datos de esta empresa para iniciar con la base en blanco. Siempre quedan la empresa, su configuración, los usuarios y los parqueos. No se puede deshacer desde la app: genera antes un backup.</p>
+      <label class="check"><input type="radio" name="lmodo" value="registros" checked> Solo los registros: cargas, mantenimientos, gastos, fotos y movimientos de repuestos (vehículos, conductores y planes se quedan)</label>
+      <label class="check" style="margin-top:6px"><input type="radio" name="lmodo" value="todo"> Todo: además vehículos, conductores, planes, proveedores, repuestos, llantas y baterías</label>
+      <div class="acts" style="justify-content:flex-start"><button class="danger" id="elim">Limpiar base de ${esc(e.nombre)}</button></div></div>
     <div class="err" id="eerr"></div><div class="acts"><button class="sec" id="erst">Restablecer</button>${e.telefono_admin?`<a class="btn sec" id="ewa" target="_blank" rel="noopener">Recordar pago por WhatsApp</a>`:""}<button class="sec" id="ex">Cerrar</button></div>`, b=>{
     const errEl=b.querySelector("#eerr"), base=e.vence&&e.vence>=PLAT.hoy?e.vence:PLAT.hoy;
     const info=()=>{ const m=+val(b,"#pm"); b.querySelector("#pinfo").textContent=`El nuevo vencimiento será el ${sumarMesesLocal(base,m)}.`; b.querySelector("#pmo").value=fmtN(pr*m,0).replace(/\./g,"").replace(",","."); };
@@ -214,7 +219,13 @@ async function empresaForm(e){
       try{ await api("plataforma",{body:{id:e.id,nombre:val(b,"#en"),telefono_admin:val(b,"#et"),plan:val(b,"#epl"),precio:val(b,"#epr"),vence:val(b,"#ev"),activo:b.querySelector("#ea").checked,
           max_sucursales:val(b,"#ls"),max_usuarios:val(b,"#lu"),max_vehiculos:val(b,"#lv")}}); closeDlg(); toast("Empresa actualizada"); go("plataforma"); }catch(x){ errEl.textContent=x.message; } };
     b.querySelector("#erst").onclick=async()=>{ errEl.textContent="";
-      try{ await api("plataforma",{body:{id:e.id,reset_usuario:val(b,"#ru"),reset_password:val(b,"#rp")}}); toast("Contraseña restablecida"); b.querySelector("#rp").value=""; }catch(x){ errEl.textContent=x.message; } }; }); }
+      try{ await api("plataforma",{body:{id:e.id,reset_usuario:val(b,"#ru"),reset_password:val(b,"#rp")}}); toast("Contraseña restablecida"); b.querySelector("#rp").value=""; }catch(x){ errEl.textContent=x.message; } };
+    b.querySelector("#elim").onclick=async()=>{ errEl.textContent=""; const modo=b.querySelector('input[name="lmodo"]:checked').value;
+      const t=await pregunta({titulo:"¿Seguro?",texto:(modo==="todo"?"Se borrarán TODOS los vehículos, conductores, planes, proveedores, repuestos y registros con sus fotos.":"Se borrarán todos los registros con sus fotos; los planes vuelven a «sin registro».")+"\n\nPara confirmar escribe el nombre de la empresa: "+e.nombre,input:"Nombre de la empresa",ok:"Borrar",peligro:true});
+      if(t==null) return; const fin=cargando("Limpiando…");
+      try{ const j=await api("plataforma",{body:{id:e.id,limpiar:modo,confirmar:t}}); fin(); closeDlg();
+        await avisar(`Se borraron ${j.borrados.eventos} registros${modo==="todo"?`, ${j.borrados.vehiculos} vehículos y ${j.borrados.conductores} conductores`:""}. ${e.nombre} quedó lista para empezar.`,"Listo"); go("plataforma"); }
+      catch(x){ fin(); errEl.textContent=x.message; } }; }); }
 // Uso de almacenamiento (R2 y D1) para el dueño de la plataforma
 const fmtB=b=>b>=1024**3?fmtN(b/1024**3,2)+" GB":b>=1024**2?fmtN(b/1024**2,1)+" MB":fmtN(b/1024,0)+" KB";
 async function almacenamiento(){ const out=$("almOut"), btn=$("almBtn"); if(!out) return; btn.disabled=true; out.innerHTML='<p class="muted">Recorriendo las fotos…</p>';
@@ -909,17 +920,7 @@ async function viewConfig(){ const P=USER.plan||{}; const PA={BO:"Bolivia",PE:"P
     <div class="field"><label>Correo(s) que reciben el resumen cada mañana</label><input id="cea" placeholder="jefe@empresa.com, gerencia@empresa.com" value="${esc(EMP.email_avisos||"")}"></div>
     <p class="muted">Mantenimientos vencidos y próximos, documentos por vencer, presupuesto superado y repuestos bajo mínimo. Guarda primero y luego envía una prueba.</p>
     <div class="acts" style="justify-content:flex-start"><button id="cok">Guardar</button><button class="sec" id="cprueba">✉️ Enviar prueba ahora</button><button class="sec" id="cver">Ver resumen de hoy</button></div><div id="cenv"></div></div>
-    <div class="card" style="max-width:640px;margin-top:12px"><h3>Tu plan: ${esc(P.nombre||"")}</h3><p>Vence: <b>${esc(EMP.vence||"sin vencimiento")}</b></p><p class="muted">Hasta ${P.vehiculos??"ilimitados"} vehículos, ${P.sucursales??"ilimitados"} parqueos y ${P.usuarios??"ilimitados"} usuarios.</p></div>
-    <div class="card" style="max-width:640px;margin-top:12px;border:1px solid var(--bad)"><h3>Empezar de cero</h3>
-    <p class="muted">Borra los datos para iniciar con la base en blanco. Siempre quedan la empresa, su configuración, los usuarios y los parqueos. No se puede deshacer desde la app.</p>
-    <label class="check"><input type="radio" name="lmodo" value="registros" checked> Solo los registros: cargas, mantenimientos, gastos, fotos y movimientos de repuestos (vehículos, conductores y planes se quedan)</label>
-    <label class="check" style="margin-top:6px"><input type="radio" name="lmodo" value="todo"> Todo: además vehículos, conductores, planes, proveedores, repuestos, llantas y baterías</label>
-    <div class="acts" style="justify-content:flex-start"><button class="danger" id="clim">🗑️ Limpiar base</button></div></div>`;
-  $("clim").onclick=async()=>{ const modo=document.querySelector('input[name="lmodo"]:checked').value;
-    const t=await pregunta({titulo:"¿Seguro?",texto:(modo==="todo"?"Se borrarán TODOS los vehículos, conductores, planes, proveedores, repuestos y registros con sus fotos.":"Se borrarán todos los registros con sus fotos; los planes vuelven a «sin registro».")+"\n\nPara confirmar escribe el nombre de la empresa: "+EMP.nombre,input:"Nombre de la empresa",ok:"Borrar",peligro:true});
-    if(t==null) return; const fin=cargando("Limpiando…");
-    try{ const j=await api("limpiar",{body:{modo,confirmar:t}}); fin(); await avisar(`Se borraron ${j.borrados.eventos} registros${modo==="todo"?`, ${j.borrados.vehiculos} vehículos y ${j.borrados.conductores} conductores`:""}. La base quedó lista para empezar.`,"Listo"); location.reload(); }
-    catch(e){ fin(); toast(e.message); } };
+    <div class="card" style="max-width:640px;margin-top:12px"><h3>Tu plan: ${esc(P.nombre||"")}</h3><p>Vence: <b>${esc(EMP.vence||"sin vencimiento")}</b></p><p class="muted">Hasta ${P.vehiculos??"ilimitados"} vehículos, ${P.sucursales??"ilimitados"} parqueos y ${P.usuarios??"ilimitados"} usuarios.</p></div>`;
   $("cp").onchange=()=>{ const p=PRE[$("cp").value]; if(!p) return; $("cm").value=p[0]; $("ctz").value=p[1]; $("cd1").value=p[2]; $("cd2").value=p[3]; };
   $("cok").onclick=async()=>{ try{ EMP=(await api("config",{body:{nombre:$("cn").value,whatsapp:$("cw").value,email:$("ce").value,moneda:$("cm").value,direccion:$("cd").value,tolerancia_consumo:$("ctc").value,retencion_fotos:$("cr").value,pais:$("cp").value,tz:$("ctz").value,doc1:$("cd1").value,doc2:$("cd2").value,
       foto_obligatoria:$("cfo").checked,ficha_publica:$("cfp").checked,email_avisos:$("cea").value,cat_mant:leerCatMant($("ccm").value)}})).empresa; USER.empresa=EMP; ls.set("ag-user",JSON.stringify(USER));

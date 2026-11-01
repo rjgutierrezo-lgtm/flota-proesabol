@@ -4,7 +4,8 @@
 // POST {id, nombre?, activo?, vence?, plan?, precio?, telefono_admin?, max_sucursales?, max_usuarios?, } → edita
 // POST {id, pago:{monto, meses, metodo, ref, nota}} → registra pago y extiende el vencimiento
 // POST {id, reset_usuario, reset_password} → restablece contraseña
-import { json, err, txt, int, num, sesion, hashPass, randomHex, validUser, slugify, hoy, sumarMeses, PERMISOS, PLANES, GRACIA_DIAS, ITER } from "../../lib/db.js";
+// POST {id, limpiar: "registros"|"todo", confirmar: nombre de la empresa} → deja la empresa en blanco (ver limpiarEmpresa)
+import { json, err, txt, int, num, sesion, hashPass, randomHex, validUser, slugify, hoy, sumarMeses, limpiarEmpresa, PERMISOS, PLANES, GRACIA_DIAS, ITER } from "../../lib/db.js";
 export async function onRequestGet({ request, env }) {
   const u = await sesion(request, env); if (!u?.super) return err("Solo el dueño de la plataforma", 403);
   const q = new URL(request.url).searchParams;
@@ -56,6 +57,11 @@ export async function onRequestPost({ request, env }) {
       const salt = randomHex(16);
       const r = await env.DB.prepare("UPDATE usuarios SET salt = ?, hash = ?, iter = ?, activo = 1 WHERE usuario = ? AND empresa_id = ?").bind(salt, await hashPass(String(b.reset_password), salt), ITER, txt(b.reset_usuario, 60).toLowerCase(), id).run();
       if (!r.meta.changes) return err("Ese usuario no pertenece a la empresa"); return json({ ok: true });
+    }
+    if (b.limpiar !== undefined) {
+      if (!["registros", "todo"].includes(b.limpiar)) return err("Elige qué borrar");
+      if (txt(b.confirmar, 100).toLowerCase() !== String(e.nombre).trim().toLowerCase()) return err("Escribe el nombre de la empresa exactamente para confirmar");
+      return json({ ok: true, borrados: await limpiarEmpresa(env, id, b.limpiar) });
     }
     const sets = [], vals = [];
     const lim = k => b[k] === "" || b[k] === null ? null : Math.max(0, int(b[k]));
