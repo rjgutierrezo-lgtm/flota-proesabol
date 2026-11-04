@@ -202,7 +202,7 @@ async function empresaForm(e){
       ${pg.map(p=>`<tr><td>${esc(p.fecha.slice(0,10))}</td><td class="n">Bs ${fmtN(p.monto)}</td><td>${p.meses}</td><td>${esc(p.vence_nuevo)}</td><td>${esc(p.metodo||"")}</td><td>${esc(p.ref||"")}</td></tr>`).join("")||'<tr><td colspan="6" class="muted">Sin pagos registrados.</td></tr>'}</tbody></table></div>
     <h3 style="margin-top:16px">Restablecer contraseña</h3><div class="row"><div class="field"><label>Usuario</label><input id="ru" placeholder="${esc((e.admins||"").split(", ")[0]||"")}"></div><div class="field"><label>Nueva contraseña</label><input id="rp" type="password"></div></div>
     <div class="card" style="margin-top:16px"><h3>📥 Importar desde Excel</h3>
-      <p class="muted">Carga conductores y vehículos (con sus fotos) desde un .xlsx: una hoja con columnas Regional, Nombres, Apellidos, CI, Teléfono, Categoría de licencia y Vencimiento, y otra con Regional, Placa, Marca, Modelo, Año, Tipo, Combustible, Capacidad tanque, Rendimiento, Km actual, Conductor asignado, Vencimiento SOAT / Inspección / Seguro y Foto. Antes de cargar verás una vista previa.</p>
+      <p class="muted">Carga conductores y vehículos (con sus fotos) desde un .xlsx: una hoja con columnas Regional, Nombres, Apellidos, CI, Teléfono, Categoría de licencia y Vencimiento (y si quieres Correo, Usuario y Contraseña para crearles su usuario), y otra con Regional, Placa, Marca, Modelo, Año, Tipo, Combustible, Capacidad tanque, Rendimiento, Km actual, Conductor asignado, Vencimiento SOAT / Inspección / Seguro y Foto. Antes de cargar verás una vista previa.</p>
       <div class="acts" style="justify-content:flex-start"><button class="sec" id="eimp">Elegir archivo Excel…</button></div></div>
     <div class="card" style="margin-top:16px;border:1px solid var(--bad)"><h3>🗑️ Empezar de cero</h3>
       <p class="muted">Borra los datos de esta empresa para iniciar con la base en blanco. Siempre quedan la empresa, su configuración, los usuarios y los parqueos. No se puede deshacer desde la app: genera antes un backup.</p>
@@ -253,9 +253,14 @@ async function importarExcel(e,file){
   const filasDe=t=>t.hoja.filas.slice(t.i+1).map((f,k)=>({f,fila:t.i+2+k})).filter(x=>x.f.some(v=>v!=null&&v!==""));
   const regs=new Set(); const cond=[], veh=[];
   if(tc){ const h=tc.h, c={reg:colX(h,x=>/regional|parqueo|sucursal|ciudad/.test(x)),nom:colX(h,x=>x.startsWith("nombre")),ape:colX(h,x=>x.startsWith("apellido")),ci:colX(h,x=>x==="ci"||x.includes("carnet")),
-      tel:colX(h,x=>/telefono|celular/.test(x)),cat:colX(h,x=>x.includes("categoria")),ven:colX(h,x=>x.includes("vencimiento"))};
-    for(const {f} of filasDe(tc)){ const nombre=titulo([f[c.nom],c.ape>=0?f[c.ape]:""].filter(Boolean).join(" ")); if(!nombre) continue; const reg=c.reg>=0?String(f[c.reg]??"").trim():""; if(reg) regs.add(reg);
-      cond.push({nombre,reg,ci:f[c.ci]!=null?String(f[c.ci]):"",telefono:f[c.tel]!=null?String(f[c.tel]):"",licencia_cat:f[c.cat]!=null?String(f[c.cat]).toUpperCase():"",licencia_vence:fechaXlsx(f[c.ven])}); } }
+      tel:colX(h,x=>/telefono|celular/.test(x)),cat:colX(h,x=>x.includes("categoria")),ven:colX(h,x=>x.includes("vencimiento")),
+      mail:colX(h,x=>/correo|email|e-mail/.test(x)),usr:colX(h,x=>x.startsWith("usuario")),pass:colX(h,x=>/contrasena|password|clave/.test(x))};
+    const s=(f,k)=>c[k]>=0&&f[c[k]]!=null?String(f[c[k]]).trim():"";
+    for(const {f} of filasDe(tc)){ const nombre=titulo([f[c.nom],c.ape>=0?f[c.ape]:""].filter(Boolean).join(" ")); if(!nombre) continue; const reg=s(f,"reg"); if(reg) regs.add(reg);
+      // si no está con el mismo nombre, se busca uno parecido ya cargado (ej: «Javier Beramendi» creado desde la hoja de vehículos)
+      const igual=ya.conductores.find(x=>normT(x.nombre)===normT(nombre)), par=igual?null:ya.conductores.find(x=>x.nombre===parecido(nombre,ya.conductores.map(y=>y.nombre)));
+      cond.push({nombre,reg,ci:s(f,"ci"),telefono:s(f,"tel"),licencia_cat:s(f,"cat").toUpperCase(),licencia_vence:fechaXlsx(f[c.ven]),existe:!!igual,id:par?.id,antes:par?.nombre,
+        email:s(f,"mail"),usuario:s(f,"usr").toLowerCase(),password:s(f,"pass")}); } }
   if(tv){ const h=tv.h, c={reg:colX(h,x=>/regional|parqueo|sucursal|ciudad/.test(x)),placa:h.indexOf("placa"),marca:colX(h,x=>x==="marca"),modelo:colX(h,x=>x==="modelo"),anio:colX(h,x=>x==="ano"||x==="anio"||x.startsWith("ano ")),
       tipo:colX(h,x=>x==="tipo"||x.startsWith("tipo ")),comb:colX(h,x=>x==="combustible"||x==="tipo de combustible"),tanque:colX(h,x=>x.includes("tanque")),rend:colX(h,x=>x.includes("rendimiento")),
       km:colX(h,x=>(x.includes("km")||x.includes("kilometraje"))&&!x.includes("rendimiento")&&!x.includes("km/l")),cond:colX(h,x=>x.includes("conductor")),soat:colX(h,x=>x.includes("soat")),itv:colX(h,x=>/inspeccion|itv|revision/.test(x)),seg:colX(h,x=>x.includes("seguro")&&!x.includes("soat")),foto:colX(h,x=>x.includes("foto"))};
@@ -270,7 +275,7 @@ async function importarExcel(e,file){
         tanque_l:f[c.tanque]??"",rendimiento_esp:f[c.rend]??"",km_actual:f[c.km]??"",conductor,nuevoC,otros:partes.slice(1),soat_vence:fechaXlsx(f[c.soat]),itv_vence:fechaXlsx(f[c.itv]),seguro_vence:fechaXlsx(f[c.seg]),blob,existe:ya.placas.includes(placa)}); } }
   const sucOpts=r=>{ const n=normT(r), a=ALIAS_REG[n]||n, pre=ya.sucursales.find(s=>normT(s.nombre)===n||normT(s.nombre).includes(a)||normT(s.nombre).includes(n));
     return `<option value="">— elegir —</option>${ya.sucursales.map(s=>`<option value="${s.id}" ${pre&&pre.id===s.id?"selected":""}>${esc(s.nombre)}</option>`).join("")}`; };
-  const ciRep=cond.filter((x,i)=>x.ci&&cond.findIndex(y=>y.ci===x.ci)!==i);
+  const ciRep=cond.filter((x,i)=>x.ci&&cond.findIndex(y=>y.ci===x.ci)!==i), conUsr=cond.some(x=>x.usuario);
   dialog(`<h3>Importar a ${esc(e.nombre)}</h3><p class="muted">${esc(file.name)}: ${cond.filter(x=>!x.desdeVeh).length} conductores y ${veh.length} vehículos (${veh.filter(v=>v.blob).length} con foto).</p>
     ${regs.size?`<h3>Parqueo de cada regional</h3>${[...regs].map(r=>`<div class="row"><div class="field"><label>Regional «${esc(r)}» →</label><select data-reg="${esc(r)}">${sucOpts(r)}</select></div></div>`).join("")}`
       :`<div class="field"><label>Parqueo</label><select data-reg="">${sucOpts("")}</select></div>`}
@@ -278,20 +283,25 @@ async function importarExcel(e,file){
     <h3>Vehículos</h3><div class="tbl"><table><thead><tr><th>Placa</th><th>Regional</th><th>Vehículo</th><th class="n">Km</th><th>Conductor</th><th>Foto</th><th></th></tr></thead><tbody>
     ${veh.map(v=>`<tr><td><b>${esc(v.placa)}</b></td><td>${esc(v.reg)}</td><td>${esc([v.marca,v.modelo,v.anio].filter(Boolean).join(" "))}<br><span class="muted">${esc([v.tipo,v.combustible].filter(Boolean).join(" · "))}</span></td><td class="n">${v.km_actual!==""?fmtN(+v.km_actual||0,0):"—"}</td>
       <td>${v.conductor?esc(v.conductor)+(v.nuevoC?' <span class="chip warn">nuevo</span>':""):'<span class="muted">sin asignar</span>'}${v.otros.length?`<br><span class="muted">también: ${esc(v.otros.join(", "))}</span>`:""}</td><td>${v.blob?"📷":""}</td><td>${v.existe?'<span class="chip">actualiza</span>':'<span class="chip ok">nuevo</span>'}</td></tr>`).join("")||'<tr><td colspan="7" class="muted">Sin vehículos.</td></tr>'}</tbody></table></div>
-    <h3>Conductores</h3><div class="tbl"><table><thead><tr><th>Nombre</th><th>Regional</th><th>CI</th><th>Teléfono</th><th>Licencia</th></tr></thead><tbody>
-    ${cond.map(c=>`<tr><td>${esc(c.nombre)}${c.desdeVeh?' <span class="chip warn">solo nombre, del vehículo</span>':""}${ya.conductores.some(x=>normT(x.nombre)===normT(c.nombre))?' <span class="chip">actualiza</span>':""}</td><td>${esc(c.reg)}</td><td>${esc(c.ci)}</td><td>${esc(c.telefono)}</td><td>${esc(c.licencia_cat)}${c.licencia_vence?" · vence "+esc(c.licencia_vence):""}</td></tr>`).join("")||'<tr><td colspan="5" class="muted">Sin conductores.</td></tr>'}</tbody></table></div>
+    ${conUsr?`<p class="muted">Se crea un usuario por conductor con su contraseña del Excel y permiso solo para registrar, en su parqueo. Un usuario que ya existe en la empresa solo se enlaza al conductor (su contraseña no cambia).</p>`:""}
+    <h3>Conductores</h3><div class="tbl"><table><thead><tr><th>Nombre</th><th>Regional</th><th>CI</th><th>Teléfono</th><th>Licencia</th>${conUsr?"<th>Usuario</th>":""}</tr></thead><tbody>
+    ${cond.map(c=>`<tr><td>${esc(c.nombre)}${c.desdeVeh?' <span class="chip warn">solo nombre, del vehículo</span>':""}${c.existe?' <span class="chip">actualiza</span>':""}${c.antes?`<br><span class="chip">actualiza «${esc(c.antes)}»</span>`:""}</td><td>${esc(c.reg)}</td><td>${esc(c.ci)}</td><td>${esc(c.telefono)}</td><td>${esc(c.licencia_cat)}${c.licencia_vence?" · vence "+esc(c.licencia_vence):""}</td>
+      ${conUsr?`<td>${c.usuario?esc(c.usuario)+(ya.usuarios.includes(c.usuario)?' <span class="chip">ya existe</span>':c.password.length>=8?' <span class="chip ok">nuevo</span>':' <span class="chip warn">sin contraseña</span>'):'<span class="muted">—</span>'}${c.email?`<br><small class="muted">${esc(c.email)}</small>`:""}</td>`:""}</tr>`).join("")||'<tr><td colspan="6" class="muted">Sin conductores.</td></tr>'}</tbody></table></div>
     <p class="muted">Un vehículo con dos conductores («A--B») queda asignado al primero. Los que ya existen (misma placa o mismo nombre) se actualizan solo con los datos que trae el Excel.</p>
     <div class="err" id="ierr"></div><div class="acts"><button class="sec" id="ino">Cancelar</button><button id="iok">Importar</button></div>`, b=>{
     b.querySelector("#ino").onclick=closeDlg;
     b.querySelector("#iok").onclick=async()=>{ const ierr=b.querySelector("#ierr"), mapa={}; ierr.textContent="";
       for(const s of b.querySelectorAll("[data-reg]")){ if(!s.value) return ierr.textContent=`Elige el parqueo para «${s.dataset.reg||"los datos"}».`; mapa[s.dataset.reg]=s.value; }
-      const suc=r=>mapa[r]??mapa[""]??Object.values(mapa)[0], tot={cn:0,ca:0,vn:0,va:0,err:[]}; cargando("Cargando conductores…");
-      try{ const j=await api("plataforma",{body:{id:e.id,importar:{conductores:cond.map(c=>({...c,sucursal_id:suc(c.reg)}))}}}); tot.cn=j.conductores.nuevos; tot.ca=j.conductores.actualizados; tot.err.push(...j.errores);
+      const suc=r=>mapa[r]??mapa[""]??Object.values(mapa)[0], tot={cn:0,ca:0,un:0,ua:0,vn:0,va:0,err:[]};
+      try{ // de a pocos cuando llevan usuario: cada contraseña se cifra en el servidor y toma tiempo
+        const paso=conUsr?3:500; for(let k=0;k<cond.length;k+=paso){ cargando(`Cargando conductores ${k+1}–${Math.min(k+paso,cond.length)} de ${cond.length}…`);
+          const j=await api("plataforma",{body:{id:e.id,importar:{conductores:cond.slice(k,k+paso).map(c=>({...c,sucursal_id:suc(c.reg)}))}}});
+          tot.cn+=j.conductores.nuevos; tot.ca+=j.conductores.actualizados; tot.un+=j.usuarios.nuevos; tot.ua+=j.usuarios.actualizados; tot.err.push(...j.errores); }
         for(let k=0;k<veh.length;k+=3){ const lote=veh.slice(k,k+3); cargando(`Cargando vehículos ${k+1}–${k+lote.length} de ${veh.length}…`);
           const datos=await Promise.all(lote.map(async v=>({...v,blob:undefined,otros:undefined,sucursal_id:suc(v.reg),foto:v.blob?await comprimirFoto(v.blob).catch(()=>null):null})));
           const r=await api("plataforma",{body:{id:e.id,importar:{vehiculos:datos}}}); tot.vn+=r.vehiculos.nuevos; tot.va+=r.vehiculos.actualizados; tot.err.push(...r.errores); }
         $("dlg2").close(); closeDlg();
-        await avisar(`Conductores: ${tot.cn} nuevos, ${tot.ca} actualizados.\nVehículos: ${tot.vn} nuevos, ${tot.va} actualizados.${tot.err.length?"\n\nNo se pudo:\n"+tot.err.join("\n"):""}`,"Importación terminada"); go("plataforma"); }
+        await avisar(`Conductores: ${tot.cn} nuevos, ${tot.ca} actualizados.${conUsr?`\nUsuarios: ${tot.un} nuevos, ${tot.ua} enlazados.`:""}\nVehículos: ${tot.vn} nuevos, ${tot.va} actualizados.${tot.err.length?"\n\nNo se pudo:\n"+tot.err.join("\n"):""}`,"Importación terminada"); go("plataforma"); }
       catch(x){ $("dlg2").close(); ierr.textContent=x.message; } }; }); }
 // Uso de almacenamiento (R2 y D1) para el dueño de la plataforma
 const fmtB=b=>b>=1024**3?fmtN(b/1024**3,2)+" GB":b>=1024**2?fmtN(b/1024**2,1)+" MB":fmtN(b/1024,0)+" KB";

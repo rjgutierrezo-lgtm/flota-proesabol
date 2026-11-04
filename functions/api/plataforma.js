@@ -4,7 +4,7 @@
 // POST {id, nombre?, activo?, vence?, plan?, precio?, telefono_admin?, max_sucursales?, max_usuarios?, } → edita
 // POST {id, pago:{monto, meses, metodo, ref, nota}} → registra pago y extiende el vencimiento
 // POST {id, reset_usuario, reset_password} → restablece contraseña
-// POST {id, importar: {conductores, vehiculos}} → carga masiva desde Excel (ver importar) | GET ?importar=ID: parqueos, conductores y placas de la empresa
+// POST {id, importar: {conductores, vehiculos}} → carga masiva desde Excel (ver importar; un conductor con usuario+password crea su usuario "registrar") | GET ?importar=ID: parqueos, conductores y placas de la empresa
 // POST {id, limpiar: "registros"|"todo", confirmar: nombre de la empresa} → deja la empresa en blanco (ver limpiarEmpresa)
 import { json, err, txt, int, num, sesion, hashPass, randomHex, validUser, slugify, hoy, sumarMeses, limpiarEmpresa, guardarFoto, normPlaca, revisarLimite, hoyTZ, PLANES_INICIALES, PERMISOS, PLANES, GRACIA_DIAS, ITER } from "../../lib/db.js";
 export async function onRequestGet({ request, env }) {
@@ -12,9 +12,10 @@ export async function onRequestGet({ request, env }) {
   const q = new URL(request.url).searchParams;
   if (q.get("pagos")) { const { results } = await env.DB.prepare("SELECT * FROM pagos WHERE empresa_id = ? ORDER BY fecha DESC").bind(int(q.get("pagos"))).all(); return json({ ok: true, pagos: results }); }
   if (q.get("importar")) { // lo que ya tiene la empresa, para la vista previa de la importación
-    const id = int(q.get("importar")), [s, c, v] = await env.DB.batch([env.DB.prepare("SELECT id, nombre FROM sucursales WHERE empresa_id = ? AND activo = 1 ORDER BY id").bind(id),
-      env.DB.prepare("SELECT id, nombre, sucursal_id FROM conductores WHERE empresa_id = ?").bind(id), env.DB.prepare("SELECT placa FROM vehiculos WHERE empresa_id = ?").bind(id)]);
-    return json({ ok: true, sucursales: s.results, conductores: c.results, placas: v.results.map(x => x.placa) });
+    const id = int(q.get("importar")), [s, c, v, u] = await env.DB.batch([env.DB.prepare("SELECT id, nombre FROM sucursales WHERE empresa_id = ? AND activo = 1 ORDER BY id").bind(id),
+      env.DB.prepare("SELECT id, nombre, sucursal_id FROM conductores WHERE empresa_id = ?").bind(id), env.DB.prepare("SELECT placa FROM vehiculos WHERE empresa_id = ?").bind(id),
+      env.DB.prepare("SELECT usuario FROM usuarios WHERE empresa_id = ?").bind(id)]);
+    return json({ ok: true, sucursales: s.results, conductores: c.results, placas: v.results.map(x => x.placa), usuarios: u.results.map(x => x.usuario) });
   }
   if (q.get("almacenamiento")) { // uso de R2 (fotos) y de D1 por empresa. R2 se recorre objeto por objeto (máximo 100 páginas de 1000)
     const emp = Object.fromEntries((await env.DB.prepare("SELECT id, nombre FROM empresas").all()).results.map(e => [e.id, e.nombre]));
@@ -102,19 +103,40 @@ export async function onRequestPost({ request, env }) {
 
 // Carga masiva desde Excel (la lee el navegador). Conductores: se actualizan por nombre o se crean. Vehículos: se actualizan por placa o se crean con sus planes de ejemplo.
 // v.conductor es el nombre de un conductor de la empresa (ya existente o de esta misma carga). Solo se cambian los campos que vienen con valor; la foto, solo si el vehículo no tiene.
+// usuario para que el conductor registre (permiso "registrar"), enlazado a su ficha. Si ya existe en la empresa solo se enlaza: su contraseña no se cambia
+async function usuarioConductor(env, e, c, cid, nombre, sid, res) {
+  const usuario = txt(c.usuario, 60).toLowerCase(), pass = String(c.password || ""), quien = `${nombre} (${usuario})`;
+  if (!validUser(usuario)) return res.errores.push(`${quien}: usuario no válido (3 a 60 letras, números, punto, guion o @)`);
+  let em = txt(c.email, 120).toLowerCase(); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) em = "";
+  const cur = await env.DB.prepare("SELECT id, empresa_id FROM usuarios WHERE usuario = ?").bind(usuario).first();
+  if (cur && cur.empresa_id !== e) return res.errores.push(`${quien}: ese usuario ya está en uso en otra empresa`);
+  if (em && await env.DB.prepare("SELECT 1 FROM usuarios WHERE lower(email) = ? AND usuario <> ?").bind(em, usuario).first()) { res.errores.push(`${quien}: el correo ${em} ya está en otro usuario, quedó sin correo`); em = ""; }
+  if (cur) { await env.DB.prepare("UPDATE usuarios SET conductor_id = ?, email = COALESCE(NULLIF(?, ''), email) WHERE id = ?").bind(cid, em, cur.id).run(); return res.usuarios.actualizados++; }
+  if (pass.length < 8) return res.errores.push(`${quien}: sin contraseña (mínimo 8 caracteres), no se creó el usuario`);
+  const lim = await revisarLimite(env, e, "usuarios"); if (lim) return res.errores.push(`${quien}: ${lim}`);
+  const salt = randomHex(16);
+  await env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, permisos, sucursales, iter, conductor_id, email) VALUES(?,?,?,?,?,?,?,?,?,?)")
+    .bind(e, usuario, nombre, await hashPass(pass, salt), salt, JSON.stringify(["registrar"]), JSON.stringify(sid ? [sid] : []), ITER, cid, em).run();
+  res.usuarios.nuevos++;
+}
 async function importar(env, e, { conductores = [], vehiculos = [] }) {
   const emp = await env.DB.prepare("SELECT tz FROM empresas WHERE id = ?").bind(e).first(), hoy = hoyTZ(emp?.tz);
   const sucs = new Set((await env.DB.prepare("SELECT id FROM sucursales WHERE empresa_id = ?").bind(e).all()).results.map(x => x.id));
   const f = d => /^\d{4}-\d{2}-\d{2}$/.test(d || "") ? d : null, sid = x => sucs.has(int(x)) ? int(x) : null, clave = s => txt(s, 80).toLowerCase().replace(/\s+/g, " ");
-  const res = { conductores: { nuevos: 0, actualizados: 0 }, vehiculos: { nuevos: 0, actualizados: 0 }, errores: [] };
-  const cond = new Map((await env.DB.prepare("SELECT id, nombre FROM conductores WHERE empresa_id = ?").bind(e).all()).results.map(x => [clave(x.nombre), x.id]));
+  const res = { conductores: { nuevos: 0, actualizados: 0 }, usuarios: { nuevos: 0, actualizados: 0 }, vehiculos: { nuevos: 0, actualizados: 0 }, errores: [] };
+  const filasC = (await env.DB.prepare("SELECT id, nombre FROM conductores WHERE empresa_id = ?").bind(e).all()).results;
+  const cond = new Map(filasC.map(x => [clave(x.nombre), x.id])), nomDe = new Map(filasC.map(x => [x.id, x.nombre]));
   for (const c of conductores.slice(0, 500)) {
     const nombre = txt(c.nombre, 80).replace(/\s+/g, " "); if (!nombre) continue;
-    const vals = [txt(c.ci, 20), txt(c.telefono, 20), txt(c.licencia_cat, 10), f(c.licencia_vence), sid(c.sucursal_id)], id = cond.get(clave(nombre));
-    if (id) { await env.DB.prepare(`UPDATE conductores SET ci = COALESCE(NULLIF(?, ''), ci), telefono = COALESCE(NULLIF(?, ''), telefono), licencia_cat = COALESCE(NULLIF(?, ''), licencia_cat),
-        licencia_vence = COALESCE(?, licencia_vence), sucursal_id = COALESCE(?, sucursal_id), activo = 1 WHERE id = ?`).bind(...vals, id).run(); res.conductores.actualizados++; }
-    else { cond.set(clave(nombre), (await env.DB.prepare("INSERT INTO conductores(nombre, ci, telefono, licencia_cat, licencia_vence, sucursal_id, activo, empresa_id) VALUES(?,?,?,?,?,?,1,?)")
-        .bind(nombre, ...vals, e).run()).meta.last_row_id); res.conductores.nuevos++; }
+    const vals = [txt(c.ci, 20), txt(c.telefono, 20), txt(c.licencia_cat, 10), f(c.licencia_vence), sid(c.sucursal_id)];
+    // c.id: conductor que ya existe con un nombre parecido (lo elige la vista previa); queda el nombre más completo
+    let id = cond.get(clave(nombre)) || (nomDe.has(int(c.id)) ? int(c.id) : null);
+    if (id) { const nom = nombre.length > (nomDe.get(id) || "").length ? nombre : nomDe.get(id);
+      await env.DB.prepare(`UPDATE conductores SET nombre = ?, ci = COALESCE(NULLIF(?, ''), ci), telefono = COALESCE(NULLIF(?, ''), telefono), licencia_cat = COALESCE(NULLIF(?, ''), licencia_cat),
+        licencia_vence = COALESCE(?, licencia_vence), sucursal_id = COALESCE(?, sucursal_id), activo = 1 WHERE id = ?`).bind(nom, ...vals, id).run(); cond.set(clave(nom), id); nomDe.set(id, nom); res.conductores.actualizados++; }
+    else { id = (await env.DB.prepare("INSERT INTO conductores(nombre, ci, telefono, licencia_cat, licencia_vence, sucursal_id, activo, empresa_id) VALUES(?,?,?,?,?,?,1,?)")
+        .bind(nombre, ...vals, e).run()).meta.last_row_id; cond.set(clave(nombre), id); nomDe.set(id, nombre); res.conductores.nuevos++; }
+    if (c.usuario) await usuarioConductor(env, e, c, id, nombre, vals[4], res);
   }
   for (const v of vehiculos.slice(0, 200)) {
     const placa = normPlaca(v.placa), s = sid(v.sucursal_id); if (placa.length < 3) continue;

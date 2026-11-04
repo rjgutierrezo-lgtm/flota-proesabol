@@ -54,6 +54,8 @@ export async function leerXlsx(file) {
 // fecha de Excel (número de serie) o texto dd/mm/aaaa → aaaa-mm-dd
 export function fechaXlsx(v) {
   if (typeof v === "number" && v > 20000 && v < 80000) return new Date(Math.round((v - 25569) * 864e5)).toISOString().slice(0, 10);
-  const m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(String(v ?? "").trim()); if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  // texto dd/mm/aaaa; si el segundo número pasa de 12 es mm/dd/aaaa (2/16/2027)
+  const m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(String(v ?? "").trim());
+  if (m) { let [d, mes] = [+m[1], +m[2]]; if (mes > 12 && d <= 12) [d, mes] = [mes, d]; return mes >= 1 && mes <= 12 && d >= 1 && d <= 31 ? `${m[3]}-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}` : null; }
   return /^\d{4}-\d{2}-\d{2}/.test(String(v ?? "")) ? String(v).slice(0, 10) : null;
 }
