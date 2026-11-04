@@ -283,6 +283,7 @@ async function importarExcel(e,file){
     <h3>Vehículos</h3><div class="tbl"><table><thead><tr><th>Placa</th><th>Regional</th><th>Vehículo</th><th class="n">Km</th><th>Conductor</th><th>Foto</th><th></th></tr></thead><tbody>
     ${veh.map(v=>`<tr><td><b>${esc(v.placa)}</b></td><td>${esc(v.reg)}</td><td>${esc([v.marca,v.modelo,v.anio].filter(Boolean).join(" "))}<br><span class="muted">${esc([v.tipo,v.combustible].filter(Boolean).join(" · "))}</span></td><td class="n">${v.km_actual!==""?fmtN(+v.km_actual||0,0):"—"}</td>
       <td>${v.conductor?esc(v.conductor)+(v.nuevoC?' <span class="chip warn">nuevo</span>':""):'<span class="muted">sin asignar</span>'}${v.otros.length?`<br><span class="muted">también: ${esc(v.otros.join(", "))}</span>`:""}</td><td>${v.blob?"📷":""}</td><td>${v.existe?'<span class="chip">actualiza</span>':'<span class="chip ok">nuevo</span>'}</td></tr>`).join("")||'<tr><td colspan="7" class="muted">Sin vehículos.</td></tr>'}</tbody></table></div>
+    ${conUsr?`<label class="check"><input type="checkbox" id="isolo" ${cond.some(c=>c.existe||c.antes)?"checked":""}> <b>Solo crear usuarios</b>: no crea ni modifica las fichas de conductor; cada usuario se enlaza al conductor que ya existe (${cond.filter(c=>c.existe||c.antes).length} de ${cond.filter(c=>c.usuario).length} encontrados)</label>`:""}
     ${conUsr?`<p class="muted">Se crea un usuario por conductor con su contraseña del Excel y permiso solo para registrar, en su parqueo. Un usuario que ya existe en la empresa solo se enlaza al conductor (su contraseña no cambia).</p>`:""}
     <h3>Conductores</h3><div class="tbl"><table><thead><tr><th>Nombre</th><th>Regional</th><th>CI</th><th>Teléfono</th><th>Licencia</th>${conUsr?"<th>Usuario</th>":""}</tr></thead><tbody>
     ${cond.map(c=>`<tr><td>${esc(c.nombre)}${c.desdeVeh?' <span class="chip warn">solo nombre, del vehículo</span>':""}${c.existe?' <span class="chip">actualiza</span>':""}${c.antes?`<br><span class="chip">actualiza «${esc(c.antes)}»</span>`:""}</td><td>${esc(c.reg)}</td><td>${esc(c.ci)}</td><td>${esc(c.telefono)}</td><td>${esc(c.licencia_cat)}${c.licencia_vence?" · vence "+esc(c.licencia_vence):""}</td>
@@ -293,15 +294,16 @@ async function importarExcel(e,file){
     b.querySelector("#iok").onclick=async()=>{ const ierr=b.querySelector("#ierr"), mapa={}; ierr.textContent="";
       for(const s of b.querySelectorAll("[data-reg]")){ if(!s.value) return ierr.textContent=`Elige el parqueo para «${s.dataset.reg||"los datos"}».`; mapa[s.dataset.reg]=s.value; }
       const suc=r=>mapa[r]??mapa[""]??Object.values(mapa)[0], tot={cn:0,ca:0,un:0,ua:0,vn:0,va:0,err:[]};
+      const solo=!!b.querySelector("#isolo")?.checked, lista=solo?cond.filter(c=>c.usuario):cond, vehs=solo?[]:veh;
       try{ // de a pocos cuando llevan usuario: cada contraseña se cifra en el servidor y toma tiempo
-        const paso=conUsr?3:500; for(let k=0;k<cond.length;k+=paso){ cargando(`Cargando conductores ${k+1}–${Math.min(k+paso,cond.length)} de ${cond.length}…`);
-          const j=await api("plataforma",{body:{id:e.id,importar:{conductores:cond.slice(k,k+paso).map(c=>({...c,sucursal_id:suc(c.reg)}))}}});
+        const paso=conUsr?3:500; for(let k=0;k<lista.length;k+=paso){ cargando(`Cargando ${solo?"usuarios":"conductores"} ${k+1}–${Math.min(k+paso,lista.length)} de ${lista.length}…`);
+          const j=await api("plataforma",{body:{id:e.id,importar:{soloUsuarios:solo,conductores:lista.slice(k,k+paso).map(c=>({...c,sucursal_id:suc(c.reg)}))}}});
           tot.cn+=j.conductores.nuevos; tot.ca+=j.conductores.actualizados; tot.un+=j.usuarios.nuevos; tot.ua+=j.usuarios.actualizados; tot.err.push(...j.errores); }
-        for(let k=0;k<veh.length;k+=3){ const lote=veh.slice(k,k+3); cargando(`Cargando vehículos ${k+1}–${k+lote.length} de ${veh.length}…`);
+        for(let k=0;k<vehs.length;k+=3){ const lote=vehs.slice(k,k+3); cargando(`Cargando vehículos ${k+1}–${k+lote.length} de ${vehs.length}…`);
           const datos=await Promise.all(lote.map(async v=>({...v,blob:undefined,otros:undefined,sucursal_id:suc(v.reg),foto:v.blob?await comprimirFoto(v.blob).catch(()=>null):null})));
           const r=await api("plataforma",{body:{id:e.id,importar:{vehiculos:datos}}}); tot.vn+=r.vehiculos.nuevos; tot.va+=r.vehiculos.actualizados; tot.err.push(...r.errores); }
         $("dlg2").close(); closeDlg();
-        await avisar(`Conductores: ${tot.cn} nuevos, ${tot.ca} actualizados.${conUsr?`\nUsuarios: ${tot.un} nuevos, ${tot.ua} enlazados.`:""}\nVehículos: ${tot.vn} nuevos, ${tot.va} actualizados.${tot.err.length?"\n\nNo se pudo:\n"+tot.err.join("\n"):""}`,"Importación terminada"); go("plataforma"); }
+        await avisar(`${solo?"":`Conductores: ${tot.cn} nuevos, ${tot.ca} actualizados.\n`}${conUsr?`Usuarios: ${tot.un} nuevos, ${tot.ua} enlazados.\n`:""}${vehs.length?`Vehículos: ${tot.vn} nuevos, ${tot.va} actualizados.`:""}${tot.err.length?"\n\nNo se pudo:\n"+tot.err.join("\n"):""}`,"Importación terminada"); go("plataforma"); }
       catch(x){ $("dlg2").close(); ierr.textContent=x.message; } }; }); }
 // Uso de almacenamiento (R2 y D1) para el dueño de la plataforma
 const fmtB=b=>b>=1024**3?fmtN(b/1024**3,2)+" GB":b>=1024**2?fmtN(b/1024**2,1)+" MB":fmtN(b/1024,0)+" KB";

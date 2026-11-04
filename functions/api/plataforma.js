@@ -111,7 +111,7 @@ async function usuarioConductor(env, e, c, cid, nombre, sid, res) {
   const cur = await env.DB.prepare("SELECT id, empresa_id FROM usuarios WHERE usuario = ?").bind(usuario).first();
   if (cur && cur.empresa_id !== e) return res.errores.push(`${quien}: ese usuario ya está en uso en otra empresa`);
   if (em && await env.DB.prepare("SELECT 1 FROM usuarios WHERE lower(email) = ? AND usuario <> ?").bind(em, usuario).first()) { res.errores.push(`${quien}: el correo ${em} ya está en otro usuario, quedó sin correo`); em = ""; }
-  if (cur) { await env.DB.prepare("UPDATE usuarios SET conductor_id = ?, email = COALESCE(NULLIF(?, ''), email) WHERE id = ?").bind(cid, em, cur.id).run(); return res.usuarios.actualizados++; }
+  if (cur) { await env.DB.prepare("UPDATE usuarios SET conductor_id = COALESCE(?, conductor_id), email = COALESCE(NULLIF(?, ''), email) WHERE id = ?").bind(cid, em, cur.id).run(); return res.usuarios.actualizados++; }
   if (pass.length < 8) return res.errores.push(`${quien}: sin contraseña (mínimo 8 caracteres), no se creó el usuario`);
   const lim = await revisarLimite(env, e, "usuarios"); if (lim) return res.errores.push(`${quien}: ${lim}`);
   const salt = randomHex(16);
@@ -119,18 +119,22 @@ async function usuarioConductor(env, e, c, cid, nombre, sid, res) {
     .bind(e, usuario, nombre, await hashPass(pass, salt), salt, JSON.stringify(["registrar"]), JSON.stringify(sid ? [sid] : []), ITER, cid, em).run();
   res.usuarios.nuevos++;
 }
-async function importar(env, e, { conductores = [], vehiculos = [] }) {
+async function importar(env, e, { conductores = [], vehiculos = [], soloUsuarios = false }) {
   const emp = await env.DB.prepare("SELECT tz FROM empresas WHERE id = ?").bind(e).first(), hoy = hoyTZ(emp?.tz);
   const sucs = new Set((await env.DB.prepare("SELECT id FROM sucursales WHERE empresa_id = ?").bind(e).all()).results.map(x => x.id));
   const f = d => /^\d{4}-\d{2}-\d{2}$/.test(d || "") ? d : null, sid = x => sucs.has(int(x)) ? int(x) : null, clave = s => txt(s, 80).toLowerCase().replace(/\s+/g, " ");
   const res = { conductores: { nuevos: 0, actualizados: 0 }, usuarios: { nuevos: 0, actualizados: 0 }, vehiculos: { nuevos: 0, actualizados: 0 }, errores: [] };
-  const filasC = (await env.DB.prepare("SELECT id, nombre FROM conductores WHERE empresa_id = ?").bind(e).all()).results;
-  const cond = new Map(filasC.map(x => [clave(x.nombre), x.id])), nomDe = new Map(filasC.map(x => [x.id, x.nombre]));
+  const filasC = (await env.DB.prepare("SELECT id, nombre, sucursal_id FROM conductores WHERE empresa_id = ?").bind(e).all()).results;
+  const cond = new Map(filasC.map(x => [clave(x.nombre), x.id])), nomDe = new Map(filasC.map(x => [x.id, x.nombre])), sucDe = new Map(filasC.map(x => [x.id, x.sucursal_id]));
   for (const c of conductores.slice(0, 500)) {
     const nombre = txt(c.nombre, 80).replace(/\s+/g, " "); if (!nombre) continue;
     const vals = [txt(c.ci, 20), txt(c.telefono, 20), txt(c.licencia_cat, 10), f(c.licencia_vence), sid(c.sucursal_id)];
     // c.id: conductor que ya existe con un nombre parecido (lo elige la vista previa); queda el nombre más completo
     let id = cond.get(clave(nombre)) || (nomDe.has(int(c.id)) ? int(c.id) : null);
+    if (soloUsuarios) { // solo usuarios: no se crean ni se tocan las fichas de conductor
+      if (!c.usuario) continue; if (!id) res.errores.push(`${nombre}: no encontré su ficha de conductor; el usuario se crea sin enlazar`);
+      await usuarioConductor(env, e, c, id, nombre, sucDe.get(id) || vals[4], res); continue;
+    }
     if (id) { const nom = nombre.length > (nomDe.get(id) || "").length ? nombre : nomDe.get(id);
       await env.DB.prepare(`UPDATE conductores SET nombre = ?, ci = COALESCE(NULLIF(?, ''), ci), telefono = COALESCE(NULLIF(?, ''), telefono), licencia_cat = COALESCE(NULLIF(?, ''), licencia_cat),
         licencia_vence = COALESCE(?, licencia_vence), sucursal_id = COALESCE(?, sucursal_id), activo = 1 WHERE id = ?`).bind(nom, ...vals, id).run(); cond.set(clave(nom), id); nomDe.set(id, nom); res.conductores.actualizados++; }
