@@ -110,13 +110,15 @@ async function usuarioConductor(env, e, c, cid, nombre, sid, res) {
   let em = txt(c.email, 120).toLowerCase(); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) em = "";
   const cur = await env.DB.prepare("SELECT id, empresa_id FROM usuarios WHERE usuario = ?").bind(usuario).first();
   if (cur && cur.empresa_id !== e) return res.errores.push(`${quien}: ese usuario ya está en uso en otra empresa`);
-  if (em && await env.DB.prepare("SELECT 1 FROM usuarios WHERE lower(email) = ? AND usuario <> ?").bind(em, usuario).first()) { res.errores.push(`${quien}: el correo ${em} ya está en otro usuario, quedó sin correo`); em = ""; }
+  if (em && await env.DB.prepare("SELECT 1 FROM usuarios WHERE lower(email) = ? AND usuario <> ?").bind(em, usuario).first()) { res.errores.push(`${quien}: el correo ${em} ya está en otro usuario`); em = ""; if (!cur) return; }
   if (cur) { await env.DB.prepare("UPDATE usuarios SET conductor_id = COALESCE(?, conductor_id), email = COALESCE(NULLIF(?, ''), email) WHERE id = ?").bind(cid, em, cur.id).run(); return res.usuarios.actualizados++; }
-  if (pass.length < 8) return res.errores.push(`${quien}: sin contraseña (mínimo 8 caracteres), no se creó el usuario`);
+  // con correo entra con "Iniciar sesión con Microsoft" (se reconoce por el correo): la contraseña del Excel se ignora y queda una al azar que nadie conoce
+  const clave = em ? randomHex(16) : pass;
+  if (clave.length < 8) return res.errores.push(`${quien}: sin correo ni contraseña, no se creó el usuario`);
   const lim = await revisarLimite(env, e, "usuarios"); if (lim) return res.errores.push(`${quien}: ${lim}`);
   const salt = randomHex(16);
   await env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, permisos, sucursales, iter, conductor_id, email) VALUES(?,?,?,?,?,?,?,?,?,?)")
-    .bind(e, usuario, nombre, await hashPass(pass, salt), salt, JSON.stringify(["registrar"]), JSON.stringify(sid ? [sid] : []), ITER, cid, em).run();
+    .bind(e, usuario, nombre, await hashPass(clave, salt), salt, JSON.stringify(["registrar"]), JSON.stringify(sid ? [sid] : []), ITER, cid, em).run();
   res.usuarios.nuevos++;
 }
 async function importar(env, e, { conductores = [], vehiculos = [], soloUsuarios = false }) {
