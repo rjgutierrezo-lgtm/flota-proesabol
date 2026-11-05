@@ -112,9 +112,9 @@ async function usuarioConductor(env, e, c, cid, nombre, sid, res) {
   if (cur && cur.empresa_id !== e) return res.errores.push(`${quien}: ese usuario ya está en uso en otra empresa`);
   if (em && await env.DB.prepare("SELECT 1 FROM usuarios WHERE lower(email) = ? AND usuario <> ?").bind(em, usuario).first()) { res.errores.push(`${quien}: el correo ${em} ya está en otro usuario`); em = ""; if (!cur) return; }
   if (cur) { await env.DB.prepare("UPDATE usuarios SET conductor_id = COALESCE(?, conductor_id), email = COALESCE(NULLIF(?, ''), email) WHERE id = ?").bind(cid, em, cur.id).run(); return res.usuarios.actualizados++; }
-  // con correo entra con "Iniciar sesión con Microsoft" (se reconoce por el correo): la contraseña del Excel se ignora y queda una al azar que nadie conoce
-  const clave = em ? randomHex(16) : pass;
-  if (clave.length < 8) return res.errores.push(`${quien}: sin correo ni contraseña, no se creó el usuario`);
+  // entra con "Iniciar sesión con Microsoft", que lo reconoce por el correo o, sin correo, por el usuario (lo que va antes de la @ de su cuenta):
+  // la contraseña del Excel no se usa y queda una al azar que nadie conoce (el administrador puede restablecerla si hace falta)
+  const clave = randomHex(16); void pass;
   const lim = await revisarLimite(env, e, "usuarios"); if (lim) return res.errores.push(`${quien}: ${lim}`);
   const salt = randomHex(16);
   await env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, permisos, sucursales, iter, conductor_id, email) VALUES(?,?,?,?,?,?,?,?,?,?)")
