@@ -637,13 +637,14 @@ function escanearVeh(){ scan({titulo:"Escanear QR del vehículo",onCode:c=>{ con
   if(!v) return "⚠️ Ese QR no es de un vehículo de tu flota"; PRESEL={vehiculo_id:v.id}; setTimeout(()=>go("registrar"),300); return "✓ "+v.placa; }}); }
 
 // ===================== Registrar =====================
-async function viewRegistrar(){ await cargarVeh(); const act=VEH.filter(v=>v.estado!=="baja");
-  const pre=PRESEL||{}; PRESEL=null; const mio=act.find(v=>v.id===USER.vehiculo_id)||(USER.conductor_id?act.find(v=>v.conductor_id===USER.conductor_id):null); // vehículo predeterminado del usuario
+async function viewRegistrar(){ await cargarVeh(); const pre=PRESEL||{}; PRESEL=null;
+  // solo los vehículos del parqueo elegido arriba (📍); el escaneado por QR y el propio del usuario se muestran aunque sean de otro parqueo
+  const act=VEH.filter(v=>v.estado!=="baja"&&(SUCS.length<2||v.sucursal_id===SUC||v.id===pre.vehiculo_id||v.id===USER.vehiculo_id||(USER.conductor_id&&v.conductor_id===USER.conductor_id))); const mio=act.find(v=>v.id===USER.vehiculo_id)||(USER.conductor_id?act.find(v=>v.conductor_id===USER.conductor_id):null); // vehículo predeterminado del usuario
   let tipo=pre.tipo==="mantenimiento"?(pre.clase||"preventivo"):pre.tipo||"combustible", vid=pre.vehiculo_id||mio?.id||(act.length===1?act[0].id:null), f1=null, f2=null, CB=null, CUF=null, LIN=null;
   await cargarProv(); await cargarCond();
   const tipos=Object.keys(TIPOS_REG).filter(t=>["preventivo","correctivo"].includes(t)?can("mantenimiento"):t==="combustible"?can("registrar")||can("combustible"):can("registrar"));
   if(!tipos.includes(tipo)) tipo=tipos[0];
-  if(!act.length){ $("main").innerHTML='<div class="card"><p class="muted">No hay vehículos activos.</p></div>'; return; }
+  if(!act.length){ $("main").innerHTML=`<div class="card"><p class="muted">No hay vehículos activos${SUCS.length>1?" en este parqueo. Cambia el parqueo arriba (📍)":""}.</p></div>`; return; }
   $("main").innerHTML=`<h2>Registrar</h2><div class="card" style="max-width:640px">
     <div class="inline"><div class="field"><label>Vehículo *</label><select id="rv"><option value="">Elige el vehículo</option>${act.map(v=>`<option value="${v.id}" ${v.id===vid?"selected":""}>${esc(v.placa)} · ${esc(v.marca)} ${esc(v.modelo)}</option>`).join("")}</select></div>
       <button class="sec" id="rsc" style="margin-bottom:12px">📷 QR</button></div><p class="muted" id="rinfo"></p>
