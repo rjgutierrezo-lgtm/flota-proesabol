@@ -203,7 +203,7 @@ async function empresaForm(e){
     <h3 style="margin-top:16px">Restablecer contraseña</h3><div class="row"><div class="field"><label>Usuario</label><input id="ru" placeholder="${esc((e.admins||"").split(", ")[0]||"")}"></div><div class="field"><label>Nueva contraseña</label><input id="rp" type="password"></div></div>
     <div class="card" style="margin-top:16px"><h3>📥 Importar desde Excel</h3>
       <p class="muted">Carga conductores y vehículos (con sus fotos) desde un .xlsx: una hoja con columnas Regional, Nombres, Apellidos, CI, Teléfono, Categoría de licencia y Vencimiento (y si quieres Correo, Usuario y Contraseña para crearles su usuario), y otra con Regional, Placa, Marca, Modelo, Año, Tipo, Combustible, Capacidad tanque, Rendimiento, Km actual, Conductor asignado, Vencimiento SOAT / Inspección / Seguro y Foto. Antes de cargar verás una vista previa.</p>
-      <div class="acts" style="justify-content:flex-start"><button class="sec" id="eimp">Elegir archivo Excel…</button></div></div>
+      <div class="acts" style="justify-content:flex-start"><button class="sec" id="eimp">Elegir archivo Excel…</button><button class="sec" id="echof">Pasar choferes a perfil chofer…</button></div></div>
     <div class="card" style="margin-top:16px;border:1px solid var(--bad)"><h3>🗑️ Empezar de cero</h3>
       <p class="muted">Borra los datos de esta empresa para iniciar con la base en blanco. Siempre quedan la empresa, su configuración, los usuarios y los parqueos. No se puede deshacer desde la app: genera antes un backup.</p>
       <label class="check"><input type="radio" name="lmodo" value="registros" checked> Solo los registros: cargas, mantenimientos, gastos, fotos y movimientos de repuestos (vehículos, conductores y planes se quedan)</label>
@@ -229,6 +229,13 @@ async function empresaForm(e){
       try{ const j=await api("plataforma",{body:{id:e.id,limpiar:modo,confirmar:t}}); fin(); closeDlg();
         await avisar(`Se borraron ${j.borrados.eventos} registros${modo==="todo"?`, ${j.borrados.vehiculos} vehículos y ${j.borrados.conductores} conductores`:""}. ${e.nombre} quedó lista para empezar.`,"Listo"); go("plataforma"); }
       catch(x){ fin(); errEl.textContent=x.message; } };
+    // usuarios enlazados a un conductor con solo «registrar» → perfil chofer (solo cargas de combustible)
+    b.querySelector("#echof").onclick=async()=>{ errEl.textContent="";
+      try{ const v=await api("plataforma",{body:{id:e.id,choferes:"ver"}});
+        if(!v.usuarios.length) return avisar("No hay usuarios de choferes con el permiso «registrar»: no hay nada que corregir.","Todo en orden");
+        const t=await pregunta({titulo:`Pasar ${v.usuarios.length} usuarios a perfil chofer`,texto:`Quedarán solo con «registrar cargas de combustible» (sin lavados, gastos ni kilometraje):\n\n${v.usuarios.map(u=>`• ${u.nombre} (${u.usuario})`).join("\n")}\n\nSolo se cambian usuarios enlazados a un conductor que tienen únicamente el permiso «registrar».`,ok:"Cambiar"});
+        if(!t) return; const r=await api("plataforma",{body:{id:e.id,choferes:"aplicar"}}); toast(`${r.usuarios.length} usuarios pasaron a perfil chofer`); }
+      catch(x){ errEl.textContent=x.message; } };
     b.querySelector("#eimp").onclick=()=>{ const i=document.createElement("input"); i.type="file"; i.accept=".xlsx"; i.onchange=()=>i.files[0]&&importarExcel(e,i.files[0]); i.click(); }; }); }
 
 // ---------- Importación masiva desde Excel (dueño de la plataforma) ----------

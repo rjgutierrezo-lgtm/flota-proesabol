@@ -71,6 +71,12 @@ export async function onRequestPost({ request, env }) {
       return json({ ok: true, borrados: await limpiarEmpresa(env, id, b.limpiar) });
     }
     if (b.importar) return json({ ok: true, ...(await importar(env, id, b.importar)) });
+    if (b.choferes) { // usuarios enlazados a un conductor que tienen solo "registrar" → perfil chofer ("combustible"). "ver" lista, "aplicar" cambia
+      const w = `empresa_id = ? AND permisos = '["registrar"]' AND conductor_id IS NOT NULL`;
+      const { results } = await env.DB.prepare(`SELECT nombre, usuario FROM usuarios WHERE ${w} ORDER BY nombre`).bind(id).all();
+      if (b.choferes === "aplicar" && results.length) await env.DB.prepare(`UPDATE usuarios SET permisos = '["combustible"]' WHERE ${w}`).bind(id).run();
+      return json({ ok: true, usuarios: results });
+    }
     const sets = [], vals = [];
     const lim = k => b[k] === "" || b[k] === null ? null : Math.max(0, int(b[k]));
     if (b.nombre !== undefined) { sets.push("nombre = ?"); vals.push(txt(b.nombre, 100)); }
