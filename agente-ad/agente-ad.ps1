@@ -52,6 +52,8 @@ $listener.Prefixes.Add("http://localhost:$puerto/")
 $listener.Start()
 Log "Agente AD escuchando en http://localhost:$puerto/ (dominio: $(if ($cfg.dominio) { $cfg.dominio } else { 'el de la máquina' }))"
 while ($listener.IsListening) {
+ # cualquier error de una consulta (por ejemplo, el cliente cortó la conexión) se registra y el agente sigue escuchando
+ try {
   $ctxHttp = $listener.GetContext(); $req = $ctxHttp.Request; $res = $ctxHttp.Response
   $res.ContentType = "application/json; charset=utf-8"
   $salida = @{ ok = $false; error = "Ruta no encontrada" }; $res.StatusCode = 404
@@ -69,4 +71,5 @@ while ($listener.IsListening) {
   } catch { $salida = @{ ok = $false; error = "Error del agente: $($_.Exception.Message)" }; $res.StatusCode = 500; Log "error: $($_.Exception.Message)" }
   $bytes = [System.Text.Encoding]::UTF8.GetBytes(($salida | ConvertTo-Json -Compress))
   $res.ContentLength64 = $bytes.Length; $res.OutputStream.Write($bytes, 0, $bytes.Length); $res.OutputStream.Close()
+ } catch { try { Log "error de conexión: $($_.Exception.Message)" } catch { } }
 }

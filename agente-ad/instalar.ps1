@@ -8,8 +8,11 @@ $cfg = Get-Content $cfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($cfg.secreto -like "cambia-esto*" -or $cfg.secreto.Length -lt 20) { Write-Host "Edita config.json y pon un secreto propio de al menos 20 caracteres."; exit 1 }
 $nombre = "FlotaControl agente AD"
 $accion = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $raiz 'agente-ad.ps1')`""
-$disparador = New-ScheduledTaskTrigger -AtStartup
-$config = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 3650) -StartWhenAvailable
+# Arranca con Windows y, además, cada 5 minutos se intenta arrancar: si ya está corriendo no pasa nada (IgnoreNew);
+# si se cayó o no arrancó al encender la PC, vuelve solo en menos de 5 minutos
+$cada5 = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes 5)
+$disparador = @((New-ScheduledTaskTrigger -AtStartup), $cada5)
+$config = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 3650) -StartWhenAvailable -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 # Corre como SYSTEM: puede consultar el dominio desde una máquina unida a él sin guardar contraseñas
 if (Get-ScheduledTask -TaskName $nombre -ErrorAction SilentlyContinue) { Stop-ScheduledTask -TaskName $nombre -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2 }
 Register-ScheduledTask -TaskName $nombre -Action $accion -Trigger $disparador -Settings $config -User "SYSTEM" -RunLevel Highest -Force | Out-Null
