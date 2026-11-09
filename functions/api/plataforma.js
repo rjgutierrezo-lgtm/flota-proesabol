@@ -4,7 +4,7 @@
 // POST {id, nombre?, activo?, vence?, plan?, precio?, telefono_admin?, max_sucursales?, max_usuarios?, } → edita
 // POST {id, pago:{monto, meses, metodo, ref, nota}} → registra pago y extiende el vencimiento
 // POST {id, reset_usuario, reset_password} → restablece contraseña
-// POST {id, importar: {conductores, vehiculos}} → carga masiva desde Excel (ver importar; un conductor con usuario+password crea su usuario "registrar") | GET ?importar=ID: parqueos, conductores y placas de la empresa
+// POST {id, importar: {conductores, vehiculos}} → carga masiva desde Excel (ver importar; un conductor con usuario+password crea su usuario con perfil chofer, permiso "combustible") | GET ?importar=ID: parqueos, conductores y placas de la empresa
 // POST {id, limpiar: "registros"|"todo", confirmar: nombre de la empresa} → deja la empresa en blanco (ver limpiarEmpresa)
 import { json, err, txt, int, num, sesion, hashPass, randomHex, validUser, slugify, hoy, sumarMeses, limpiarEmpresa, guardarFoto, normPlaca, revisarLimite, hoyTZ, PLANES_INICIALES, PERMISOS, PLANES, GRACIA_DIAS, ITER } from "../../lib/db.js";
 export async function onRequestGet({ request, env }) {
@@ -103,7 +103,8 @@ export async function onRequestPost({ request, env }) {
 
 // Carga masiva desde Excel (la lee el navegador). Conductores: se actualizan por nombre o se crean. Vehículos: se actualizan por placa o se crean con sus planes de ejemplo.
 // v.conductor es el nombre de un conductor de la empresa (ya existente o de esta misma carga). Solo se cambian los campos que vienen con valor; la foto, solo si el vehículo no tiene.
-// usuario para que el conductor registre (permiso "registrar"), enlazado a su ficha. Si ya existe en la empresa solo se enlaza: su contraseña no se cambia
+// usuario del conductor con perfil chofer (permiso "combustible": solo registra cargas), enlazado a su ficha.
+// Si ya existe en la empresa se enlaza (su contraseña no se cambia); si quedó solo con "registrar" (importaciones anteriores) pasa a perfil chofer
 async function usuarioConductor(env, e, c, cid, nombre, sid, res) {
   const usuario = txt(c.usuario, 60).toLowerCase(), pass = String(c.password || ""), quien = `${nombre} (${usuario})`;
   if (!validUser(usuario)) return res.errores.push(`${quien}: usuario no válido (3 a 60 letras, números, punto, guion o @)`);
@@ -111,14 +112,14 @@ async function usuarioConductor(env, e, c, cid, nombre, sid, res) {
   const cur = await env.DB.prepare("SELECT id, empresa_id FROM usuarios WHERE usuario = ?").bind(usuario).first();
   if (cur && cur.empresa_id !== e) return res.errores.push(`${quien}: ese usuario ya está en uso en otra empresa`);
   if (em && await env.DB.prepare("SELECT 1 FROM usuarios WHERE lower(email) = ? AND usuario <> ?").bind(em, usuario).first()) { res.errores.push(`${quien}: el correo ${em} ya está en otro usuario`); em = ""; if (!cur) return; }
-  if (cur) { await env.DB.prepare("UPDATE usuarios SET conductor_id = COALESCE(?, conductor_id), email = COALESCE(NULLIF(?, ''), email) WHERE id = ?").bind(cid, em, cur.id).run(); return res.usuarios.actualizados++; }
+  if (cur) { await env.DB.prepare("UPDATE usuarios SET conductor_id = COALESCE(?, conductor_id), email = COALESCE(NULLIF(?, ''), email), permisos = CASE WHEN permisos = '[\"registrar\"]' THEN '[\"combustible\"]' ELSE permisos END WHERE id = ?").bind(cid, em, cur.id).run(); return res.usuarios.actualizados++; }
   // entra con "Iniciar sesión con Microsoft", que lo reconoce por el correo o, sin correo, por el usuario (lo que va antes de la @ de su cuenta):
   // la contraseña del Excel no se usa y queda una al azar que nadie conoce (el administrador puede restablecerla si hace falta)
   const clave = randomHex(16); void pass;
   const lim = await revisarLimite(env, e, "usuarios"); if (lim) return res.errores.push(`${quien}: ${lim}`);
   const salt = randomHex(16);
   await env.DB.prepare("INSERT INTO usuarios(empresa_id, usuario, nombre, hash, salt, permisos, sucursales, iter, conductor_id, email) VALUES(?,?,?,?,?,?,?,?,?,?)")
-    .bind(e, usuario, nombre, await hashPass(clave, salt), salt, JSON.stringify(["registrar"]), JSON.stringify(sid ? [sid] : []), ITER, cid, em).run();
+    .bind(e, usuario, nombre, await hashPass(clave, salt), salt, JSON.stringify(["combustible"]), JSON.stringify(sid ? [sid] : []), ITER, cid, em).run();
   res.usuarios.nuevos++;
 }
 async function importar(env, e, { conductores = [], vehiculos = [], soloUsuarios = false }) {
