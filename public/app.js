@@ -501,7 +501,7 @@ async function cargarProv(){ try{ PROV=(await api("proveedores")).proveedores; l
 // Proveedores: qué tipo usa cada registro y sus nombres en pantalla [singular, plural, "el/la ..."]
 const TIPO_PROV={combustible:"surtidor",mantenimiento:"taller",lavado:"lavadero",gasto:"proveedor"};
 const ETIQ_PROV={surtidor:["Estación de servicio","Estaciones de servicio","la estación de servicio"],taller:["Taller","Talleres","el taller"],lavadero:["Lavadero","Lavaderos","el lavadero"],proveedor:["Proveedor","Otros proveedores","el proveedor"]};
-const provDe=tp=>PROV.filter(p=>p.tipo===tp&&p.activo), puedeProv=()=>can("mantenimiento")||can("vehiculos");
+const provDe=tp=>PROV.filter(p=>p.tipo===tp&&p.activo), puedeProv=tp=>can("mantenimiento")||can("vehiculos")||(tp==="surtidor"&&(can("combustible")||can("registrar"))); // el chofer puede agregar estaciones de servicio
 const norm=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim();
 async function nuevoProv(tp,nombre,nit=""){ try{ const r=await api("proveedores",{body:{tipo:tp,nombre,nit}}); const p={id:r.id,tipo:tp,nombre,nit,telefono:"",nota:"",activo:1,usos:0}; PROV.push(p); ls.set("ag-prov-"+USER.id,JSON.stringify(PROV)); toast("Agregado a la lista de proveedores"); return p; }
   catch(e){ toast(e.message); return null; } }
@@ -683,7 +683,7 @@ async function viewRegistrar(){ await cargarVeh(); const pre=PRESEL||{}; PRESEL=
       gasto:`<div class="row"><div class="field"><label>Tipo de gasto</label><select id="fc"><option>Peaje</option><option>Repuesto</option><option>Llantas</option><option>Multa</option><option>SOAT</option><option>Seguro</option><option>Franquicia</option><option>Infraseguro</option><option>Parqueo</option><option>Otro</option></select></div>${mon(1)}${fecha}</div>
         <div class="row">${km}${prov("Proveedor","")}</div><div class="row">${fac}${cond}</div>${det}${fotoCampo("f1","Foto del comprobante")}`,
       kilometraje:`<div class="row">${km}${fecha}${cond}</div>${det}${fotoCampo("f1","Foto del odómetro (opcional)")}`})[tipo];
-    CB=$("fp")?combo($("rform"),"fp",provDe(tp),{etiq:ETIQ_PROV[tp][2],plural:ETIQ_PROV[tp][1],nuevo:puedeProv()?n=>nuevoProv(tp,n):null}):null;
+    CB=$("fp")?combo($("rform"),"fp",provDe(tp),{etiq:ETIQ_PROV[tp][2],plural:ETIQ_PROV[tp][1],nuevo:puedeProv(tp)?n=>nuevoProv(tp,n):null}):null;
     LIN=$("flin")?editorLineas($("flin"),tipo==="correctivo"?[{}]:[],$("fm")):null;
     f1=f2=null; if($("f1")) enlazarFoto($("rform"),"f1",d=>f1=d); if($("f2")) enlazarFoto($("rform"),"f2",d=>f2=d); };
   $("rv").onchange=form; $("rtip").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{ tipo=b.dataset.t; form(); });
@@ -699,7 +699,7 @@ async function viewRegistrar(){ await cargarVeh(); const pre=PRESEL||{}; PRESEL=
       const tp=TIPO_PROV[tEv(tipo)];
       if(CB){ if(j.proveedor) CB.set(j.proveedor);
         else if(f.emisor){ if(!provDe(tp).length) CB.setTexto(f.emisor);
-          else if(puedeProv()&&await confirmar(`"${f.emisor}" (NIT ${f.nit}) no está en tu lista de ${ETIQ_PROV[tp][1].toLowerCase()}. ¿Agregarlo?`,{ok:"Agregar"})){ const p=await nuevoProv(tp,f.emisor,f.nit); if(p) CB.set(p); }
+          else if(puedeProv(tp)&&await confirmar(`"${f.emisor}" (NIT ${f.nit}) no está en tu lista de ${ETIQ_PROV[tp][1].toLowerCase()}. ¿Agregarlo?`,{ok:"Agregar"})){ const p=await nuevoProv(tp,f.emisor,f.nit); if(p) CB.set(p); }
           else toast(`${f.emisor} no está en la lista: elige ${ETIQ_PROV[tp][2]} a mano`); } }
       $("rfacInfo").innerHTML=`🧾 Factura ${esc(f.numero)} · ${esc(f.emisor)} · <b>${money(f.monto)}</b> · ${fechaCorta(f.fecha)}${f.litros?` · ${fmtN(f.litros)} L${f.precio_litro?` a ${money(f.precio_litro)}/L`:""}`:""}${f.tipo_comb?` · ${esc(f.tipo_comb)}`:""} <span class="chip ${j.valida?"ok":"bad"}">${esc(f.estado||"sin estado")}</span><br><small>CUF ${esc(f.cuf)}</small>`;
       if(!j.valida) await avisar(`El SIN reporta esta factura como "${f.estado}". Revísala antes de guardar.`,"⚠️ Atención");
@@ -843,7 +843,7 @@ async function viewHistorial(){ await cargarVeh(); await cargarProv(); await car
       <p class="muted">Al guardar se recalculan el kilometraje actual del vehículo, el rendimiento de las cargas y la fecha del último mantenimiento.</p>
       <div class="err" id="ee"></div><div class="acts"><button class="sec" id="ex">Cancelar</button><button id="eok">Guardar</button></div>`, B=>{
       B.querySelector("#ex").onclick=()=>detalleEvento(e); const LE=man?editorLineas(B.querySelector("#elin"),lineasDe(e),B.querySelector("#em")):null;
-      const tp=TIPO_PROV[t], CB=B.querySelector("#ep")?combo(B,"ep",provDe(tp),{valor:e.proveedor||"",etiq:ETIQ_PROV[tp][2],plural:ETIQ_PROV[tp][1],nuevo:puedeProv()?n=>nuevoProv(tp,n):null}):null;
+      const tp=TIPO_PROV[t], CB=B.querySelector("#ep")?combo(B,"ep",provDe(tp),{valor:e.proveedor||"",etiq:ETIQ_PROV[tp][2],plural:ETIQ_PROV[tp][1],nuevo:puedeProv(tp)?n=>nuevoProv(tp,n):null}):null;
       B.querySelector("#eok").onclick=async()=>{ const pv=CB?CB.get():{proveedor:""}; if(pv.error) return B.querySelector("#ee").textContent=pv.error; const le=LE&&LE.validar(false); if(le) return B.querySelector("#ee").textContent=le;
         try{ await api("eventos",{body:{id:e.id,editar:true,km:val(B,"#ek").replace(",","."),litros:val(B,"#el").replace(",","."),monto:val(B,"#em").replace(",","."),lleno:B.querySelector("#ell")?B.querySelector("#ell").checked:true,fecha:val(B,"#ef"),proveedor:pv.proveedor,proveedor_id:pv.proveedor_id||null,categoria:val(B,"#ec"),detalle:val(B,"#ed"),factura:val(B,"#efa"),conductor_id:val(B,"#eco"),clase:val(B,"#ecl")||undefined,items:LE?LE.get():undefined}});
         closeDlg(); toast("Registro corregido"); load(); }catch(x){ B.querySelector("#ee").textContent=x.message; } }; }); };

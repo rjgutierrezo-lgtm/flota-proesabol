@@ -1,6 +1,6 @@
 // Catálogo de proveedores de la empresa: talleres, estaciones de servicio, lavaderos y otros.
 // GET ?tipo= : lista (cualquier usuario de la empresa) | POST crear/editar | POST {importar:true} toma los nombres ya usados en el historial
-// Administran: permiso "mantenimiento" o "vehiculos".
+// Administran: permiso "mantenimiento" o "vehiculos". El chofer ("combustible" o "registrar") puede agregar estaciones de servicio nuevas al registrar una carga.
 import { json, err, txt, int, sesion, puede, TIPOS_PROV, E } from "../../lib/db.js";
 const TIPOS = [...new Set(Object.values(TIPOS_PROV))];
 export async function onRequestGet({ request, env }) {
@@ -12,8 +12,9 @@ export async function onRequestGet({ request, env }) {
   return json({ ok: true, proveedores: results });
 }
 export async function onRequestPost({ request, env }) {
-  const u = await sesion(request, env); if (!puede(u, "mantenimiento") && !puede(u, "vehiculos")) return err("No tienes permiso para administrar proveedores", 403);
-  const b = await request.json().catch(() => ({}));
+  const u = await sesion(request, env), b = await request.json().catch(() => ({}));
+  const admin = puede(u, "mantenimiento") || puede(u, "vehiculos"), chofer = !b.id && !b.importar && b.tipo === "surtidor" && (puede(u, "combustible") || puede(u, "registrar"));
+  if (!admin && !chofer) return err("No tienes permiso para administrar proveedores", 403);
   if (b.importar) { // crea un proveedor por cada nombre distinto que ya aparece en los registros y aún no está en la lista
     const caso = "CASE e.tipo WHEN 'combustible' THEN 'surtidor' WHEN 'mantenimiento' THEN 'taller' WHEN 'lavado' THEN 'lavadero' ELSE 'proveedor' END";
     const r = await env.DB.prepare(`INSERT INTO proveedores(empresa_id, tipo, nombre) SELECT DISTINCT e.empresa_id, ${caso}, trim(e.proveedor) FROM eventos e
