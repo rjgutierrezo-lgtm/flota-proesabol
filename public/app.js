@@ -501,9 +501,9 @@ async function cargarProv(){ try{ PROV=(await api("proveedores")).proveedores; l
 // Proveedores: qué tipo usa cada registro y sus nombres en pantalla [singular, plural, "el/la ..."]
 const TIPO_PROV={combustible:"surtidor",mantenimiento:"taller",lavado:"lavadero",gasto:"proveedor"};
 const ETIQ_PROV={surtidor:["Estación de servicio","Estaciones de servicio","la estación de servicio"],taller:["Taller","Talleres","el taller"],lavadero:["Lavadero","Lavaderos","el lavadero"],proveedor:["Proveedor","Otros proveedores","el proveedor"]};
-const provDe=tp=>PROV.filter(p=>p.tipo===tp&&p.activo), puedeProv=tp=>can("mantenimiento")||can("vehiculos")||(tp==="surtidor"&&(can("combustible")||can("registrar"))); // el chofer puede agregar estaciones de servicio
+const provDe=(tp,sid)=>PROV.filter(p=>p.tipo===tp&&p.activo&&(tp!=="surtidor"||!sid||!p.sucursal_id||p.sucursal_id===sid)), puedeProv=tp=>can("mantenimiento")||can("vehiculos")||(tp==="surtidor"&&(can("combustible")||can("registrar"))); // el chofer puede agregar estaciones de servicio
 const norm=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim();
-async function nuevoProv(tp,nombre,nit=""){ try{ const r=await api("proveedores",{body:{tipo:tp,nombre,nit}}); const p={id:r.id,tipo:tp,nombre,nit,telefono:"",nota:"",activo:1,usos:0}; PROV.push(p); ls.set("ag-prov-"+USER.id,JSON.stringify(PROV)); toast("Agregado a la lista de proveedores"); return p; }
+async function nuevoProv(tp,nombre,nit="",sid=null){ sid=tp==="surtidor"&&SUCS.length>1?sid:null; try{ const r=await api("proveedores",{body:{tipo:tp,nombre,nit,sucursal_id:sid}}); const p={id:r.id,tipo:tp,nombre,nit,telefono:"",nota:"",activo:1,usos:0,sucursal_id:sid}; PROV.push(p); ls.set("ag-prov-"+USER.id,JSON.stringify(PROV)); toast("Agregado a la lista de proveedores"); return p; }
   catch(e){ toast(e.message); return null; } }
 // Campo con lista desplegable y buscador. Si la lista tiene elementos solo se puede elegir uno de ellos; si está vacía es texto libre.
 const comboHTML=(id,label,hay,ph)=>`<div class="field"><label>${label}</label><div class="combo"><input id="${id}" autocomplete="off" placeholder="${hay?"Busca y elige de la lista":esc(ph||"")}"><div class="opts hidden" id="${id}L"></div></div><small class="muted" id="${id}H"></small></div>`;
@@ -667,7 +667,7 @@ async function viewRegistrar(){ await cargarVeh(); const pre=PRESEL||{}; PRESEL=
     $("rinfo").textContent=v?`Último km: ${fmtKm(v.km_actual)}${v.conductor?` · Conductor: ${v.conductor}`:""}${v.rendimiento_esp?` · Esperado ${v.rendimiento_esp} km/l`:""}`:"";
     const km=`<div class="field"><label>Kilometraje (odómetro)${["combustible","kilometraje"].includes(tipo)?" *":""}</label><input id="fk" inputmode="numeric" placeholder="${v?Math.round(v.km_actual):""}"></div>`;
     const fecha=`<div class="field"><label>Fecha</label><input type="date" id="ff" value="${today()}" max="${today()}"></div>`;
-    const te=tEv(tipo), tp=TIPO_PROV[te], prov=(l,ph)=>comboHTML("fp",l,provDe(tp).length,ph), det=`<div class="field"><label>Detalle</label><input id="fd"></div>`;
+    const te=tEv(tipo), tp=TIPO_PROV[te], sidV=v?.sucursal_id||SUC, prov=(l,ph)=>comboHTML("fp",l,provDe(tp,sidV).length,ph), det=`<div class="field"><label>Detalle</label><input id="fd"></div>`;
     const fac=`<div class="field"><label>N° de factura</label><input id="ffa" placeholder="Opcional"></div>`, cond=`<div class="field"><label>Conductor (quién manejaba)</label>${selCond("fco",USER.conductor_id||v?.conductor_id||null)}</div>`;
     const mon=r=>`<div class="field"><label>Monto (${esc(EMP.moneda)})${r?" *":""}</label><input id="fm" inputmode="decimal"></div>`;
     const planes=v?v.planes:[], lin=`<div class="field"><label>Repuestos y mano de obra${tipo==="correctivo"?" *":""}</label><div id="flin"></div></div>`;
@@ -683,7 +683,7 @@ async function viewRegistrar(){ await cargarVeh(); const pre=PRESEL||{}; PRESEL=
       gasto:`<div class="row"><div class="field"><label>Tipo de gasto</label><select id="fc"><option>Peaje</option><option>Repuesto</option><option>Llantas</option><option>Multa</option><option>SOAT</option><option>Seguro</option><option>Franquicia</option><option>Infraseguro</option><option>Parqueo</option><option>Otro</option></select></div>${mon(1)}${fecha}</div>
         <div class="row">${km}${prov("Proveedor","")}</div><div class="row">${fac}${cond}</div>${det}${fotoCampo("f1","Foto del comprobante")}`,
       kilometraje:`<div class="row">${km}${fecha}${cond}</div>${det}${fotoCampo("f1","Foto del odómetro (opcional)")}`})[tipo];
-    CB=$("fp")?combo($("rform"),"fp",provDe(tp),{etiq:ETIQ_PROV[tp][2],plural:ETIQ_PROV[tp][1],nuevo:puedeProv(tp)?n=>nuevoProv(tp,n):null}):null;
+    CB=$("fp")?combo($("rform"),"fp",provDe(tp,sidV),{etiq:ETIQ_PROV[tp][2],plural:ETIQ_PROV[tp][1],nuevo:puedeProv(tp)?n=>nuevoProv(tp,n,"",sidV):null}):null;
     LIN=$("flin")?editorLineas($("flin"),tipo==="correctivo"?[{}]:[],$("fm")):null;
     f1=f2=null; if($("f1")) enlazarFoto($("rform"),"f1",d=>f1=d); if($("f2")) enlazarFoto($("rform"),"f2",d=>f2=d); };
   $("rv").onchange=form; $("rtip").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{ tipo=b.dataset.t; form(); });
@@ -699,7 +699,7 @@ async function viewRegistrar(){ await cargarVeh(); const pre=PRESEL||{}; PRESEL=
       const tp=TIPO_PROV[tEv(tipo)];
       if(CB){ if(j.proveedor) CB.set(j.proveedor);
         else if(f.emisor){ if(!provDe(tp).length) CB.setTexto(f.emisor);
-          else if(puedeProv(tp)&&await confirmar(`"${f.emisor}" (NIT ${f.nit}) no está en tu lista de ${ETIQ_PROV[tp][1].toLowerCase()}. ¿Agregarlo?`,{ok:"Agregar"})){ const p=await nuevoProv(tp,f.emisor,f.nit); if(p) CB.set(p); }
+          else if(puedeProv(tp)&&await confirmar(`"${f.emisor}" (NIT ${f.nit}) no está en tu lista de ${ETIQ_PROV[tp][1].toLowerCase()}. ¿Agregarlo?`,{ok:"Agregar"})){ const p=await nuevoProv(tp,f.emisor,f.nit,veh()?.sucursal_id||SUC); if(p) CB.set(p); }
           else toast(`${f.emisor} no está en la lista: elige ${ETIQ_PROV[tp][2]} a mano`); } }
       $("rfacInfo").innerHTML=`🧾 Factura ${esc(f.numero)} · ${esc(f.emisor)} · <b>${money(f.monto)}</b> · ${fechaCorta(f.fecha)}${f.litros?` · ${fmtN(f.litros)} L${f.precio_litro?` a ${money(f.precio_litro)}/L`:""}`:""}${f.tipo_comb?` · ${esc(f.tipo_comb)}`:""} <span class="chip ${j.valida?"ok":"bad"}">${esc(f.estado||"sin estado")}</span><br><small>CUF ${esc(f.cuf)}</small>`;
       if(!j.valida) await avisar(`El SIN reporta esta factura como "${f.estado}". Revísala antes de guardar.`,"⚠️ Atención");
@@ -899,15 +899,18 @@ async function viewProveedores(){ await cargarProv(); let tp=PRESEL?.tipo_prov||
   $("main").innerHTML=`<h2>Proveedores</h2><p class="muted">Talleres, estaciones de servicio y lavaderos de la empresa. Mientras un tipo tenga proveedores, al registrar solo se puede elegir de esta lista.</p>
     <div class="toolbar"><div class="toolbar" id="ptip" style="margin:0">${Object.keys(ETIQ_PROV).map(t=>`<button data-t="${t}">${ETIQ_PROV[t][1]}</button>`).join("")}</div><span style="flex:1"></span>
       <button class="sec" id="pimp" title="Crea un proveedor por cada nombre que ya aparece en el historial">⤓ Importar del historial</button><button id="pnew">+ Nuevo</button></div><div id="plist"></div>`;
+  const conSuc=()=>tp==="surtidor"&&SUCS.length>1, nomSuc=id=>id?esc(sucName(id)):'<span class="muted">Todos</span>';
   const pintar=()=>{ $("ptip").querySelectorAll("[data-t]").forEach(b=>b.className=b.dataset.t===tp?"":"sec"); const l=PROV.filter(p=>p.tipo===tp);
-    $("plist").innerHTML=`<div class="card tbl"><table><thead><tr><th>Nombre</th><th>NIT</th><th>Teléfono</th><th>Nota</th><th class="n">Registros</th></tr></thead><tbody>${l.map(p=>`<tr class="click" data-id="${p.id}" style="${p.activo?"":"opacity:.5"}"><td><b>${esc(p.nombre)}</b>${p.activo?"":' <span class="chip">inactivo</span>'}</td><td><small>${esc(p.nit||"")}</small></td><td>${esc(p.telefono)}</td><td><small>${esc(p.nota)}</small></td><td class="n">${p.usos||0}</td></tr>`).join("")
-      ||`<tr><td colspan="5" class="muted">Aún no hay ${ETIQ_PROV[tp][1].toLowerCase()}. Mientras esta lista esté vacía, en Registrar se escribe el nombre a mano.</td></tr>`}</tbody></table></div>`;
+    $("plist").innerHTML=`<div class="card tbl"><table><thead><tr><th>Nombre</th>${conSuc()?"<th>Parqueo</th>":""}<th>NIT</th><th>Teléfono</th><th>Nota</th><th class="n">Registros</th></tr></thead><tbody>${l.map(p=>`<tr class="click" data-id="${p.id}" style="${p.activo?"":"opacity:.5"}"><td><b>${esc(p.nombre)}</b>${p.activo?"":' <span class="chip">inactivo</span>'}</td>${conSuc()?`<td><small>${nomSuc(p.sucursal_id)}</small></td>`:""}<td><small>${esc(p.nit||"")}</small></td><td>${esc(p.telefono)}</td><td><small>${esc(p.nota)}</small></td><td class="n">${p.usos||0}</td></tr>`).join("")
+      ||`<tr><td colspan="6" class="muted">Aún no hay ${ETIQ_PROV[tp][1].toLowerCase()}. Mientras esta lista esté vacía, en Registrar se escribe el nombre a mano.</td></tr>`}</tbody></table></div>`;
     $("plist").querySelectorAll("tr[data-id]").forEach(tr=>tr.onclick=()=>form(PROV.find(p=>p.id==tr.dataset.id))); };
   const form=p=>dialog(`<h3>${p?"Editar":"Nuevo"} proveedor</h3><div class="row"><div class="field"><label>Tipo</label><select id="pt">${Object.keys(ETIQ_PROV).map(t=>`<option value="${t}" ${(p?p.tipo:tp)===t?"selected":""}>${ETIQ_PROV[t][0]}</option>`).join("")}</select></div><div class="field"><label>Nombre *</label><input id="pn" value="${esc(p?.nombre||"")}"></div></div>
+    ${SUCS.length>1?`<div class="field" id="psw"><label>Parqueo (dónde aparece al registrar la carga)</label><select id="psu"><option value="">Todos los parqueos</option>${SUCS.map(s=>`<option value="${s.id}" ${p?(p.sucursal_id===s.id?"selected":""):""}>${esc(s.nombre)}</option>`).join("")}</select></div>`:""}
     <div class="row"><div class="field"><label>NIT (para reconocerlo al escanear la factura)</label><input id="pnit" inputmode="numeric" value="${esc(p?.nit||"")}"></div><div class="field"><label>Teléfono</label><input id="pf" value="${esc(p?.telefono||"")}"></div><div class="field"><label>Nota</label><input id="po" value="${esc(p?.nota||"")}" placeholder="Dirección, contacto, horario…"></div></div>
     ${p?`<label class="check"><input type="checkbox" id="pa" ${p.activo?"checked":""}> Activo (si lo desactivas ya no aparece al registrar)</label>`:""}<div class="err" id="pe"></div><div class="acts"><button class="sec" id="px">Cancelar</button><button id="pok">Guardar</button></div>`, B=>{
     B.querySelector("#px").onclick=closeDlg;
-    B.querySelector("#pok").onclick=async()=>{ try{ await api("proveedores",{body:{id:p?.id,tipo:val(B,"#pt"),nombre:val(B,"#pn"),nit:val(B,"#pnit"),telefono:val(B,"#pf"),nota:val(B,"#po"),activo:p?B.querySelector("#pa").checked:true}}); closeDlg(); toast("Guardado"); tp=val(B,"#pt"); await cargarProv(); pintar(); }
+    const psw=B.querySelector("#psw"), verSuc=()=>{ if(psw) psw.hidden=val(B,"#pt")!=="surtidor"; }; B.querySelector("#pt").onchange=verSuc; verSuc();
+    B.querySelector("#pok").onclick=async()=>{ try{ await api("proveedores",{body:{id:p?.id,tipo:val(B,"#pt"),nombre:val(B,"#pn"),sucursal_id:psw?val(B,"#psu")||null:null,nit:val(B,"#pnit"),telefono:val(B,"#pf"),nota:val(B,"#po"),activo:p?B.querySelector("#pa").checked:true}}); closeDlg(); toast("Guardado"); tp=val(B,"#pt"); await cargarProv(); pintar(); }
       catch(e){ B.querySelector("#pe").textContent=e.message; } }; });
   $("ptip").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{ tp=b.dataset.t; pintar(); });
   $("pnew").onclick=()=>form(null);

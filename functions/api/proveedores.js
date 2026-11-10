@@ -1,7 +1,8 @@
 // Catálogo de proveedores de la empresa: talleres, estaciones de servicio, lavaderos y otros.
 // GET ?tipo= : lista (cualquier usuario de la empresa) | POST crear/editar | POST {importar:true} toma los nombres ya usados en el historial
 // Administran: permiso "mantenimiento" o "vehiculos". El chofer ("combustible" o "registrar") puede agregar estaciones de servicio nuevas al registrar una carga.
-import { json, err, txt, int, sesion, puede, TIPOS_PROV, E } from "../../lib/db.js";
+// sucursal_id: solo estaciones de servicio; parqueo donde aparece al registrar (NULL = en todos los parqueos).
+import { json, err, txt, int, sesion, puede, misSucursales, TIPOS_PROV, E } from "../../lib/db.js";
 const TIPOS = [...new Set(Object.values(TIPOS_PROV))];
 export async function onRequestGet({ request, env }) {
   const u = await sesion(request, env); if (!u || u.super) return err("Inicia sesión", 401);
@@ -23,13 +24,17 @@ export async function onRequestPost({ request, env }) {
     return json({ ok: true, importados: r.meta.changes });
   }
   const tipo = TIPOS.includes(b.tipo) ? b.tipo : "taller", nombre = txt(b.nombre, 80); if (!nombre) return err("Falta el nombre");
-  const dup = await env.DB.prepare("SELECT id FROM proveedores WHERE empresa_id = ? AND tipo = ? AND lower(nombre) = lower(?) AND id <> ?").bind(E(u), tipo, nombre, int(b.id)).first();
+  // parqueo: uno de los del usuario (el chofer, el suyo); vacío = todos los parqueos
+  const sid = tipo === "surtidor" ? int(b.sucursal_id) || null : null;
+  if (sid && !(await misSucursales(env, u)).some(s => s.id === sid)) return err("Elige un parqueo válido");
+  const dup = await env.DB.prepare("SELECT id FROM proveedores WHERE empresa_id = ? AND tipo = ? AND lower(nombre) = lower(?) AND id <> ? AND (sucursal_id IS NULL OR ? IS NULL OR sucursal_id = ?)")
+    .bind(E(u), tipo, nombre, int(b.id), sid, sid).first();
   if (dup) return err("Ya existe uno con ese nombre");
-  const vals = [tipo, nombre, txt(b.telefono, 30), txt(b.nota, 200), b.activo === false ? 0 : 1, txt(b.nit, 20).replace(/\D/g, "")];
+  const vals = [tipo, nombre, txt(b.telefono, 30), txt(b.nota, 200), b.activo === false ? 0 : 1, txt(b.nit, 20).replace(/\D/g, ""), sid];
   if (b.id) {
-    const r = await env.DB.prepare("UPDATE proveedores SET tipo=?, nombre=?, telefono=?, nota=?, activo=?, nit=? WHERE id=? AND empresa_id=?").bind(...vals, int(b.id), E(u)).run();
+    const r = await env.DB.prepare("UPDATE proveedores SET tipo=?, nombre=?, telefono=?, nota=?, activo=?, nit=?, sucursal_id=? WHERE id=? AND empresa_id=?").bind(...vals, int(b.id), E(u)).run();
     if (!r.meta.changes) return err("No encontrado", 404); return json({ ok: true });
   }
-  const r = await env.DB.prepare("INSERT INTO proveedores(empresa_id, tipo, nombre, telefono, nota, activo, nit) VALUES(?,?,?,?,?,?,?)").bind(E(u), ...vals).run();
+  const r = await env.DB.prepare("INSERT INTO proveedores(empresa_id, tipo, nombre, telefono, nota, activo, nit, sucursal_id) VALUES(?,?,?,?,?,?,?,?)").bind(E(u), ...vals).run();
   return json({ ok: true, id: r.meta.last_row_id });
 }
